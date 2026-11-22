@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; media-src 'self'; img-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<title>從零撰寫｜GapCaster</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">跳到主要內容</a>
+<header class="site-header"><nav aria-label="網站"><a href="index.html">GapCaster 口述影像試用</a></nav></header>
+<main id="main">
+<h1>從零撰寫口述影像</h1>
+<p id="who" class="panel">請用 Ted 傳給你的個人連結開啟這一頁，或在下面填代號、選擇片段和哪一半。</p>
+<noscript><p class="warn">這一頁需要開啟 JavaScript 才能計時和下載檔案。</p></noscript>
+
+<section aria-labelledby="h-start">
+<h2 id="h-start">開始之前</h2>
+<ul>
+<li>試用時間是 2026 年 11 月 25 日（星期三）到 11 月 29 日（星期日）晚上 10 點（臺北時間），建議在 11 月 28 日以前做完。</li>
+<li>這一頁給撰稿人「從零撰寫」的那一半用。另一半（修改 GapCaster 的草稿）請用 Ted 另外寄給你的審閱頁。</li>
+<li>也可以用你平常的工具寫，只要在這一頁按「開始計時」和「完成」，最後把文字貼進下面的文字框，再下載檔案。</li>
+<li>先按「開始計時」，再開始看片和撰寫。中途休息請按「暫停」，回來按「繼續」。</li>
+<li>一句口述寫一行，開頭寫時間，格式是 <span class="kbd">[時:分:秒.毫秒]</span>，例如 <span class="kbd">[00:00:12.500]</span> 女孩跑上山坡。時間從整段片段的開頭算，不是從這一半的開頭算。按「插入目前時間」會自動填好。</li>
+<li>內容只暫存在這臺裝置的瀏覽器，不會自動送出。做完請按「下載檔案」，用 email 附件寄給 Ted：tedinroc@gmail.com。</li>
+<li>參加前請先看<a href="consent.html">試用同意書</a>。</li>
+</ul>
+
+<div id="setup" hidden>
+<h3 id="h-setup">選擇代號、片段和哪一半</h3>
+<form id="setup-form" aria-labelledby="h-setup" novalidate>
+<label class="block" for="in-code">你的代號（Ted 給你的，例如 W03）</label>
+<input type="text" id="in-code" name="code" autocomplete="off" autocapitalize="characters" spellcheck="false">
+<fieldset>
+<legend>哪一段片？</legend>
+<label class="opt" for="in-clip-a"><input type="radio" id="in-clip-a" name="clip" value="A"> 片段 A：<span lang="en">Tears of Steel</span></label>
+<label class="opt" for="in-clip-b"><input type="radio" id="in-clip-b" name="clip" value="B"> 片段 B：《Spring》</label>
+</fieldset>
+<fieldset>
+<legend>哪一半？</legend>
+<label class="opt" for="in-half-1"><input type="radio" id="in-half-1" name="half" value="1"> 前半</label>
+<label class="opt" for="in-half-2"><input type="radio" id="in-half-2" name="half" value="2"> 後半</label>
+</fieldset>
+<button type="submit" class="btn">開始這一半</button>
+</form>
+</div>
+</section>
+
+<div id="work" hidden>
+<section aria-labelledby="h-clip">
+<h2 id="h-clip">片段</h2>
+<video id="video" controls preload="metadata" playsinline></video>
+<p class="fallback">播放器不好用的話，可以<a id="video-link" href="index.html">直接開啟這段影片</a>。</p>
+<p id="offset-warn" class="warn" hidden>這一半的起點時間還沒設定，「插入目前時間」會從這一半的開頭算。請告訴 Ted。</p>
+</section>
+
+<section aria-labelledby="h-timer">
+<h2 id="h-timer">計時</h2>
+<p><span id="timer-state">還沒開始</span>，已計時 <span id="timer" class="timer">00:00:00</span></p>
+<div class="btn-row">
+<button type="button" class="btn" id="t-start">開始計時</button>
+<button type="button" class="btn secondary" id="t-pause" disabled>暫停</button>
+<button type="button" class="btn secondary" id="t-resume" disabled>繼續</button>
+<button type="button" class="btn" id="t-finish" disabled>完成</button>
+</div>
+<p id="status" class="status" role="status" aria-live="polite"></p>
+<label class="block" for="timer-note">計時備註（可不填）</label>
+<p class="hint" id="timer-note-hint">例如：忘了按開始，實際大約 14:05 開始；或用自己的工具寫，時間記在這裡。</p>
+<input type="text" id="timer-note" aria-describedby="timer-note-hint" autocomplete="off">
+</section>
+
+<section aria-labelledby="h-write">
+<h2 id="h-write">撰寫</h2>
+<div class="btn-row">
+<button type="button" class="btn secondary" id="insert-time">插入目前時間</button>
+</div>
+<p class="hint" id="keys-hint">游標在文字框裡時可以用快速鍵：<span class="kbd">Alt</span>（Mac 是 <span class="kbd">Option</span>）加 <span class="kbd">T</span> 插入目前時間；加 <span class="kbd">K</span> 播放或暫停；加 <span class="kbd">J</span> 倒退 5 秒。</p>
+<label class="block" for="text">口述稿（一句一行，開頭寫時間）</label>
+<textarea id="text" class="writing" aria-describedby="keys-hint line-info" spellcheck="false"></textarea>
+<p id="line-info" class="muted">目前 0 行。</p>
+</section>
+
+<section aria-labelledby="h-done">
+<h2 id="h-done">交回</h2>
+<div class="btn-row">
+<button type="button" class="btn" id="download">下載檔案（JSON）</button>
+</div>
+<p>下載的檔案名稱會像 <span class="kbd">gapcaster-write_W03_r1_A_h2.json</span>。請用 email 附件寄給 Ted：tedinroc@gmail.com。</p>
+<p>四個半段（兩個從零撰寫、兩個修改草稿）全部做完以後，請回答最後幾個問題，寫在同一封回信裡：3 個 1 到 5 分的問題，以及每段片一題「在這次試用以前，有沒有聽過這段片的口述影像，或讀過、審閱過它的口述影像稿」。題目在 Ted 的信裡，也在<a href="questions.html">題目稿</a>最後一節。</p>
+<h3 id="h-clear">清除</h3>
+<p>確定 Ted 收到檔案以後，可以刪除這臺裝置上暫存的內容。</p>
+<button type="button" class="btn secondary" id="clear">清除這臺裝置上的內容</button>
+</section>
+</div>
+</main>
+<footer class="site-footer">
+<p>GapCaster 試用網站 v2。這個網頁不會自動送出任何資料。</p>
+</footer>
+<script src="assets/common.js"></script>
+<script src="assets/write.js"></script>
+</body>
+</html>

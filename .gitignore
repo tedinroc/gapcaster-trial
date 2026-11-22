@@ -1,0 +1,67 @@
+# GapCaster trial site: files that must never be committed (see README.md).
+# tools/check.py is the main guard; this file only keeps `git add -A` from picking them up.
+
+# Anything from stage2/pilot-private/
+pilot-private/
+round2-audio/
+ORDER.txt
+order-list.txt
+roster.csv
+site-values.json
+forbidden.txt
+pilot_log.json
+voiceover-test.md
+
+# Audio and video: only the listed public files in media/ may be committed.
+*.mp3
+*.m4a
+*.m4b
+*.wav
+*.aac
+*.ogg
+*.oga
+*.opus
+*.flac
+*.aif
+*.aiff
+*.caf
+*.weba
+*.mp4
+*.m4v
+*.mov
+*.webm
+*.mkv
+*.avi
+*.3gp
+!media/A_noad.mp3
+!media/A_ad.mp3
+!media/B_noad.mp3
+!media/B_ad.mp3
+!media/write/A_h1.mp4
+!media/write/A_h2.mp4
+!media/write/B_h1.mp4
+!media/write/B_h2.mp4
+# Review pages (draft only): see README.md, 審閱頁.
+!review/A-1/clip.mp4
+!review/A-1/clip_with_ad.mp4
+!review/A-1/lines/AD*.wav
+!review/A-2/clip.mp4
+!review/A-2/clip_with_ad.mp4
+!review/A-2/lines/AD*.wav
+!review/B-1/clip.mp4
+!review/B-1/clip_with_ad.mp4
+!review/B-1/lines/AD*.wav
+!review/B-2/clip.mp4
+!review/B-2/clip_with_ad.mp4
+!review/B-2/lines/AD*.wav
+
+# Names of the privately sent round-2 files. Listed after the re-includes so they always win.
+*版本一*
+*版本二*
+*沒有口述影像*
+# Describer-voiced lines and approved exports (they carry describer text). Also after the re-includes.
+*_edited.wav
+approved/
+
+# macOS folder metadata
+.DS_Store
