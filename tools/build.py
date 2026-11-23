@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Build listen.html, questions.md and consent.html for the GapCaster trial site.
+"""Build listen.html, final.html, questions.md, questions.html and consent.html for the
+GapCaster trial site.
 
 One source of truth: the listener questions below are rendered both into the web page
 (listen.html) and into the phone script Ted reads aloud (questions.md), so the two can
-never drift apart. consent.html is rendered from consent.md.
+never drift apart. The describers' final questions are rendered into final.html (a form with
+a 送出 button) and into questions.md (the copy-paste fallback). consent.html is rendered from
+consent.md.
 
 Standard library only. Run from anywhere:  python3 tools/build.py
 """
@@ -16,13 +19,21 @@ from pathlib import Path
 SITE = Path(__file__).resolve().parent.parent
 # v2 (23 November 2026): one trial round only (25-29 November), no round choice on any page, and the
 # per-clip exposure question. v1 was never used by a participant.
-PAGE_VERSION = "v2"
+# v3 (23 November 2026): open self-serve route (join.html), the listeners' vision-status question,
+# the describers' experience question, and the 送出 button that posts answers to the trial inbox.
+# v2 was never used by a participant.
+PAGE_VERSION = "v3"
+
+# The trial inbox. Its full address lives in assets/common.js (GC_INBOX), the only script that may
+# talk to the network; pages that submit allow exactly this origin in their CSP.
+INBOX_ORIGIN = "https://gapcaster-trial-inbox.pages.dev"
 
 # ---------------------------------------------------------------------------
 # Listener questions (Traditional Chinese, Taiwan usage). Edit here, then rebuild.
 # key: short tag used in the result code; label: short name; text: the question.
 # ---------------------------------------------------------------------------
 UNDERSTOOD_NOAD = {
+    "id": "understood",
     "key": "懂",
     "label": "看懂",
     "text": "聽完這個沒有口述影像的版本，你覺得自己知道畫面上發生了什麼事嗎？",
@@ -31,36 +42,42 @@ UNDERSTOOD_NOAD = {
 
 AD_ITEMS = [
     {
+        "id": "understood",
         "key": "懂",
         "label": "看懂",
         "text": "聽完這個版本，你覺得自己知道畫面上發生了什麼事嗎？",
         "options": ["完全不知道", "大多不知道", "一半一半", "大多知道", "完全知道"],
     },
     {
+        "id": "content",
         "key": "內",
         "label": "內容",
         "text": "口述說的內容，也就是說了哪些事、怎麼說，對你有沒有幫助？請只評內容，不評聲音。",
         "options": ["完全沒幫助", "幫助很少", "普通", "有幫助", "非常有幫助"],
     },
     {
+        "id": "clarity",
         "key": "聲",
         "label": "聲音清楚",
         "text": "口述的聲音清不清楚、好不好聽懂？請只評聲音，不評內容。",
         "options": ["完全聽不清楚", "常常聽不清楚", "普通", "大多清楚", "非常清楚"],
     },
     {
+        "id": "not_covered",
         "key": "蓋",
         "label": "沒蓋到",
         "text": "口述有沒有蓋到對白或重要的聲音，例如音樂或音效？",
         "options": ["常常蓋到", "好幾次蓋到", "偶爾蓋到", "很少蓋到", "完全沒蓋到"],
     },
     {
+        "id": "overall",
         "key": "整",
         "label": "整體",
         "text": "整體來說，這個版本你給幾分？",
         "options": ["很差", "差", "普通", "好", "很好"],
     },
     {
+        "id": "want_more",
         "key": "想",
         "label": "想再看",
         "text": "如果有更多像這樣附口述影像的影片，你想不想看？",
@@ -71,6 +88,7 @@ AD_ITEMS = [
 COMPREHENSION_HINT = "只問畫面上的事。用自己的話回答就好，不知道可以寫「不知道」。"
 
 ENGLISH = {
+    "id": "english",
     "line": "英語",
     "text": "片段 A 的英語對白，你大概聽得懂多少？",
     "hint": "這題不影響結果，只是分析時把聽得懂和聽不懂英語的人分開看。",
@@ -78,6 +96,7 @@ ENGLISH = {
 }
 
 METHOD = {
+    "id": "method",
     "line": "聽法",
     "text": "這次你是怎麼聽的？",
     "hint": "通話時由 Ted 代填。",
@@ -85,9 +104,28 @@ METHOD = {
 }
 
 COMMENT = {
+    "id": "comment",
     "line": "備註",
     "text": "還有什麼想說的嗎？（可不填）",
-    "hint": "這段文字不會逐字公開。如果想引用其中一句，會先逐句問你。",
+    "hint": ("這段文字不會逐字公開。請不要寫姓名或聯絡方式。受邀參加的人，如果想引用其中一句，會先逐句問你；"
+             "公開參加的人沒有留下聯絡方式，所以你寫的話不會被引用。"),
+}
+
+# Vision status (v3, 23 November 2026). Asked first, before clip B, of every listener (invited and
+# open). Only 全盲 and 低視能 count as listeners in the analysis; 看得見 is reported separately and never
+# pooled with them (a group under 3 is not shown); 不想說 is left out of the listener analysis and
+# only counted. Unanswered counts as 不想說, except for an invited listener, whose self-description at
+# recruitment is used (eval-protocol.md, Amendment 2). It is in the result code as its own line,
+# e.g. "視力 全盲".
+VISION = {
+    "id": "vision",
+    "line": "視力",
+    "label": "視力狀況",
+    "text": "你的視力狀況是？",
+    "hint": ("這一題決定你的作答怎麼統計：選「全盲」或「低視能」，算進聽眾的結果；選「看得見」，另外統計，"
+             "不和全盲、低視能的結果合在一起；選「不想說」，不放進聽眾的分析，只算人數。"
+             "沒有回答這一題，當作「不想說」；受邀參加的人，改用報名時說的視力狀況。不論怎麼選，都可以照常做完。"),
+    "options": ["全盲", "低視能", "看得見", "不想說"],
 }
 
 # Exposure question, one per clip (pre-registered before the trial): before this trial, had the
@@ -101,9 +139,9 @@ EXPOSURE = {
     "label": "以前接觸過",
     "text": "在參加這次試用以前，你有沒有聽過{film}的口述影像，或讀過、審閱過它的口述影像稿？",
     "listener_hint": ("請在播放這段片以前回答。沒聽過也沒讀過，選「沒有」；記不清楚，選「不確定」。"
-                      "不論怎麼回答，都可以照常做完，酬勞照付。"),
+                      "不論怎麼回答，都可以照常做完；受邀參加的人，酬勞也照付。"),
     "writer_hint": ("這次試用裡看到的草稿、你自己寫的和改的都不算。記不清楚，選「不確定」。"
-                    "不論怎麼回答，酬勞照付。"),
+                    "不論怎麼回答，受邀參加的人酬勞都照付。"),
     "options": ["沒有", "有", "不確定"],
 }
 
@@ -114,11 +152,13 @@ LISTENER_SUMMARY = (
     "二、您會聽到的口述影像是 AI 寫的草稿，用合成語音唸，不是真人配音。"
     "三、參加完全自願，任何題目都可以不答，隨時可以停，不用說原因，酬勞 800 元照付。"
     "四、通話不錄音。"
-    "五、除了作答，我只記下您自述是全盲或低視能，以及付款和聯絡需要的資料。"
-    "六、公開的只有代號和分數，不公開姓名；想引用您的話，會先逐句問您。"
-    "七、用代號標示的作答，我會用 Anthropic 公司的 AI 工具 Claude 協助分析，它的伺服器在臺灣以外；"
+    "五、除了作答，我只記下您自述的視力狀況，以及付款和聯絡需要的資料。"
+    "六、做完我會在網頁上按「送出」，用代號標示的作答會存到我在 Cloudflare 的儲存空間，伺服器可能在臺灣以外，"
+    "2027 年 3 月 1 日前會自動刪除。"
+    "七、公開的只有代號和分數，不公開姓名；想引用您的話，會先逐句問您。"
+    "八、用代號標示的作答，我會用 Anthropic 公司的 AI 工具 Claude 協助分析，它的伺服器在臺灣以外；"
     "您的姓名、聯絡方式和付款資料不會交給它。"
-    "八、個人資料最晚在 2027 年 3 月 1 日前刪除，想退出、查詢或刪除，隨時告訴我。"
+    "九、個人資料最晚在 2027 年 3 月 1 日前刪除，想退出、查詢或刪除，隨時告訴我。"
     "請問您年滿 18 歲嗎？同意參加嗎？通話後我會傳一則簡訊，麻煩回「同意」兩個字。」"
 )
 
@@ -153,8 +193,8 @@ CLIPS = [
 #      kept from v1 for continuity; there is no second described version.
 # Describers' edited text is never voiced for listeners, so no other audio exists for this page.
 VERSIONS = [
-    {"slot": "N", "line": "無", "heading": "先聽，沒有口述影像的版本", "src": "{clip}_noad.mp3"},
-    {"slot": "1", "line": "一", "heading": "再聽，有口述影像的版本", "src": "{clip}_ad.mp3"},
+    {"slot": "N", "line": "無", "field": "no_ad", "heading": "先聽，沒有口述影像的版本", "src": "{clip}_noad.mp3"},
+    {"slot": "1", "line": "一", "field": "ad", "heading": "再聽，有口述影像的版本", "src": "{clip}_ad.mp3"},
 ]
 
 
@@ -169,7 +209,7 @@ HEAD = """<!doctype html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; media-src 'self'; img-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; media-src 'self'; img-src 'self'; connect-src {connect}; form-action 'none'; base-uri 'none'; object-src 'none'">
 <meta name="robots" content="noindex, nofollow">
 <meta name="referrer" content="no-referrer">
 <meta name="color-scheme" content="light dark">
@@ -184,11 +224,24 @@ HEAD = """<!doctype html>
 
 FOOT = """</main>
 <footer class="site-footer">
-<p>GapCaster 試用網站 {version}。這個網頁不會自動送出任何資料。</p>
+<p>GapCaster 試用網站 {version}。{note}</p>
 </footer>
 {scripts}</body>
 </html>
 """
+# Footer notes: pages that can submit, and pages that never send anything.
+NOTE_SUBMIT = "只有按「送出」，這個網頁才會把作答傳給 Ted。"
+NOTE_NONE = "這個網頁不會送出任何資料。"
+CONNECT_NONE = "'none'"
+
+
+def head(title: str, submit: bool = False) -> str:
+    """Page head. A page that submits allows exactly the inbox origin in connect-src."""
+    return HEAD.format(title=title, connect=INBOX_ORIGIN if submit else CONNECT_NONE)
+
+
+def foot(scripts: str, submit: bool = False) -> str:
+    return FOOT.format(version=PAGE_VERSION, note=NOTE_SUBMIT if submit else NOTE_NONE, scripts=scripts)
 
 GENERATED_NOTE = "<!-- Generated by tools/build.py. Edit the source there, then rebuild. -->\n"
 
@@ -202,11 +255,14 @@ def opt_label(i: int, text: str) -> str:
 
 
 def question_html(qid: str, name: str, legend: str, options: list[str], line: str, key: str,
-                  numbered_scale: bool = True, hint: str | None = None, legend_html: str | None = None) -> str:
+                  numbered_scale: bool = True, hint: str | None = None, legend_html: str | None = None,
+                  field: str | None = None) -> str:
     """A radio group: fieldset, legend, optional hint, one label per option. legend_html, when given,
-    is already-escaped HTML for the legend (for lang marks); otherwise legend is escaped here."""
+    is already-escaped HTML for the legend (for lang marks); otherwise legend is escaped here.
+    field is the dotted path of the answer in the submitted payload (e.g. "B.ad.content")."""
     described = f' aria-describedby="{qid}-hint"' if hint else ""
-    out = [f'<fieldset id="{qid}" data-line="{esc(line)}" data-key="{esc(key)}"{described}>',
+    fattr = f' data-field="{esc(field)}"' if field else ""
+    out = [f'<fieldset id="{qid}" data-line="{esc(line)}" data-key="{esc(key)}"{fattr}{described}>',
            f"<legend>{legend_html if legend_html is not None else esc(legend)}</legend>"]
     if hint:
         out.append(f'<p class="hint" id="{qid}-hint">{esc(hint)}</p>')
@@ -232,34 +288,45 @@ def comprehension_text(clip: dict) -> str:
 
 
 def build_listen() -> str:
-    parts = [HEAD.format(title="聆聽試用｜GapCaster"), GENERATED_NOTE]
+    parts = [head("聆聽試用｜GapCaster", submit=True), GENERATED_NOTE]
     parts.append("""<h1>口述影像聆聽試用</h1>
-<p id="who" class="panel">還沒有代號。請用 Ted 傳給你的個人連結開啟這一頁，或在下面輸入代號。</p>
+<p id="who" class="panel">還沒有代號。受邀參加的人，請用 Ted 傳給你的個人連結開啟這一頁，或在下面輸入代號。公開參加的人，請先到<a href="join.html">參加頁</a>取得代號。</p>
 
 <section aria-labelledby="h-start">
 <h2 id="h-start">開始之前</h2>
 <ul>
-<li>試用時間是 2026 年 11 月 25 日（星期三）到 11 月 29 日（星期日）晚上 10 點（臺北時間）。請在這段時間內做完，並傳出結果碼。試用結束以後，有口述影像的版本會從網站移除，就不能再播放。</li>
+<li>試用時間是 2026 年 11 月 25 日（星期三）到 11 月 29 日（星期日）晚上 10 點（臺北時間）。請在這段時間內做完並按「送出作答」。試用結束以後，有口述影像的版本會從網站移除，就不能再播放。</li>
 <li>請戴耳機，或在安靜的地方聽。</li>
+<li>做完以前，請不要另外找這兩段片的影片來看；這一頁只用聲音。</li>
+<li>最前面先回答一題：你的視力狀況。</li>
 <li>每段片開始播放以前，請先回答一題：在這次試用以前，你有沒有聽過這段片的口述影像，或讀過、審閱過它的口述影像稿。</li>
 <li>然後先聽沒有口述影像的版本，再聽有口述影像的版本。每個版本聽完，再回答它下面的題目。</li>
 <li>口述影像是 AI 寫的草稿，用合成語音唸出來。</li>
 <li>播放器不會自動播放，請自己按「播放」。每個版本都可以重聽。</li>
-<li>每一題都可以不答。不想做了隨時可以停止，酬勞照付。</li>
-<li>作答只暫存在這臺裝置的瀏覽器，不會自動送出。全部做完，請在頁面最後按「複製結果碼」，再用 email 或 LINE 傳給 Ted：tedinroc@gmail.com。</li>
+<li>每一題都可以不答。不想做了隨時可以停止。受邀參加的人，停止也照付酬勞；公開參加沒有酬勞。</li>
+<li>全部做完，請在頁面最後按「送出作答」，作答會傳到 Ted 在 Cloudflare 的儲存空間。按下以前，作答只暫存在這臺裝置的瀏覽器，不會送出。送不出去的時候，可以改用「複製結果碼」，用 email 傳給 Ted：tedinroc@gmail.com（受邀參加的人也可以用 LINE）。</li>
+<li>理解題和備註請不要寫姓名或聯絡方式。</li>
 <li>參加前請先看<a href="consent.html">試用同意書</a>。</li>
 </ul>
 
 <div id="setup" hidden>
 <h3 id="h-setup">輸入代號</h3>
 <form id="setup-form" aria-labelledby="h-setup" novalidate>
-<label class="block" for="in-code">你的代號（Ted 給你的，例如 L07）</label>
+<label class="block" for="in-code">你的代號（Ted 給你的，例如 L07；公開參加的人，用參加頁給你的代號：OL- 開頭，後面 5 個字）</label>
 <input type="text" id="in-code" name="code" autocomplete="off" autocapitalize="characters" spellcheck="false">
 <button type="submit" class="btn">用這個代號開始</button>
 </form>
+<p>公開參加、還沒有代號的人，請先到<a href="join.html">參加頁</a>。</p>
 </div>
 </section>
 """)
+
+    # Vision status: the very first question, before clip B.
+    parts.append('\n<section aria-labelledby="h-vision">')
+    parts.append(f'<h2 id="h-vision">先回答：{esc(VISION["label"])}</h2>')
+    parts.append(question_html("q-vision", "vision", VISION["text"], VISION["options"], VISION["line"], "",
+                               numbered_scale=False, hint=VISION["hint"], field=VISION["id"]))
+    parts.append("</section>")
 
     for clip in CLIPS:
         c = clip["id"]
@@ -272,7 +339,8 @@ def build_listen() -> str:
         parts.append(f'<h3 id="h-{c}-pre">{esc(c)}：聽之前先回答</h3>')
         parts.append(question_html(f"q-{c}-pre", f"{c}-pre", exposure_legend(clip), EXPOSURE["options"],
                                    c + EXPOSURE["line"], "", numbered_scale=False,
-                                   hint=EXPOSURE["listener_hint"], legend_html=exposure_legend(clip, True)))
+                                   hint=EXPOSURE["listener_hint"], legend_html=exposure_legend(clip, True),
+                                   field=f"{c}.exposure"))
         parts.append("</div>")
         for v in VERSIONS:
             slot = v["slot"]
@@ -286,54 +354,70 @@ def build_listen() -> str:
             if slot == "N":
                 item = UNDERSTOOD_NOAD
                 parts.append(question_html(f"q-{c}-{slot}-1", f"{c}-{slot}-1", legend_for(item, None),
-                                           item["options"], line, item["key"]))
+                                           item["options"], line, item["key"],
+                                           field=f"{c}.{v['field']}.{item['id']}"))
             else:
                 for n, item in enumerate(AD_ITEMS, start=1):
                     parts.append(question_html(f"q-{c}-{slot}-{n}", f"{c}-{slot}-{n}", legend_for(item, n),
-                                               item["options"], line, item["key"]))
+                                               item["options"], line, item["key"],
+                                               field=f"{c}.{v['field']}.{item['id']}"))
             parts.append("</div>")
         # Comprehension question (screen content only), asked once per clip after the described version.
         qid = f"q-{c}-comp"
         parts.append(f'<h3 id="h-{c}-comp">{esc(c)}：理解題</h3>')
         parts.append(f'<label class="block" for="{qid}">{esc(comprehension_text(clip))}</label>')
         parts.append(f'<p class="hint" id="{qid}-hint">{esc(COMPREHENSION_HINT)}</p>')
-        parts.append(f'<input type="text" id="{qid}" name="{c}-comp" data-line="{c}理解" aria-describedby="{qid}-hint" autocomplete="off">')
+        parts.append(f'<input type="text" id="{qid}" name="{c}-comp" data-line="{c}理解" data-field="{c}.comprehension" aria-describedby="{qid}-hint" autocomplete="off">')
         if clip["english"]:
             parts.append(question_html(f"q-{c}-en", f"{c}-en", ENGLISH["text"], ENGLISH["options"],
-                                       ENGLISH["line"], "", numbered_scale=False, hint=ENGLISH["hint"]))
+                                       ENGLISH["line"], "", numbered_scale=False, hint=ENGLISH["hint"],
+                                       field=f"{c}.{ENGLISH['id']}"))
         parts.append("</section>")
 
     parts.append(f"""
 <section aria-labelledby="h-end">
 <h2 id="h-end">最後兩題</h2>
-{question_html("q-method", "method", METHOD["text"], METHOD["options"], METHOD["line"], "", numbered_scale=False, hint=METHOD["hint"])}
+{question_html("q-method", "method", METHOD["text"], METHOD["options"], METHOD["line"], "", numbered_scale=False, hint=METHOD["hint"], field=METHOD["id"])}
 <label class="block" for="q-comment">{esc(COMMENT["text"])}</label>
 <p class="hint" id="q-comment-hint">{esc(COMMENT["hint"])}</p>
-<textarea id="q-comment" name="comment" data-line="{COMMENT["line"]}" aria-describedby="q-comment-hint" rows="4"></textarea>
+<textarea id="q-comment" name="comment" data-line="{COMMENT["line"]}" data-field="{COMMENT["id"]}" aria-describedby="q-comment-hint" rows="4"></textarea>
 </section>
 """)
     # Plain (non-f) string on purpose: tools/fill.py replaces the contact placeholder inside this
     # file, and inside an f-string the doubled braces would survive as literal braces on the page.
     parts.append("""
-<section aria-labelledby="h-result">
-<h2 id="h-result">結果碼</h2>
-<p>按「複製結果碼」，再打開 LINE 或 email，貼上並傳給 Ted：tedinroc@gmail.com。網頁不會自動送出任何資料。</p>
+<section aria-labelledby="h-send">
+<h2 id="h-send">送出</h2>
+<p>按「送出作答」，你的代號、各題的回答和下面的結果碼，會傳到 Ted 在 Cloudflare 的儲存空間。按下以前，什麼都不會送出。送出以後又改了作答，可以再送一次，Ted 用最後一次送出的版本。</p>
 <p id="unanswered" class="muted"></p>
 <div class="btn-row">
-<button type="button" class="btn" id="copy">複製結果碼</button>
+<button type="button" class="btn" id="send">送出作答</button>
+</div>
+<p id="send-status" class="status" role="status" aria-live="polite"></p>
+<p id="send-receipt" class="muted"></p>
+<div id="send-help" class="warn" hidden>
+<p>送不出去也沒關係，作答還在這臺裝置上。可以稍後再按一次「送出作答」，或用下面的「複製結果碼」，貼到 email 寄給 Ted：tedinroc@gmail.com（受邀參加的人也可以用 LINE）。用 email 或 LINE 傳，Ted 會看到你的 email 地址或 LINE 名稱。</p>
+</div>
+</section>
+
+<section aria-labelledby="h-result">
+<h2 id="h-result">結果碼（送不出去的時候用）</h2>
+<p>送出不成功時，按「複製結果碼」，再打開 email，貼上並寄給 Ted：tedinroc@gmail.com（受邀參加的人也可以用 LINE）。結果碼的內容和「送出作答」送出的一樣。</p>
+<div class="btn-row">
+<button type="button" class="btn secondary" id="copy">複製結果碼</button>
 <button type="button" class="btn secondary" id="share" hidden>分享結果碼（手機）</button>
 </div>
 <p id="status" class="status" role="status" aria-live="polite"></p>
 <label class="block" for="code-out">結果碼（也可以自己選取複製）</label>
-<textarea id="code-out" class="code" readonly rows="14"></textarea>
+<textarea id="code-out" class="code" readonly rows="16"></textarea>
 
 <h3 id="h-clear">清除作答</h3>
-<p>作答暫存在這臺裝置的瀏覽器裡，方便你中途離開再回來。做完並傳出結果碼以後，可以按下面的按鈕刪除。</p>
+<p>作答暫存在這臺裝置的瀏覽器裡，方便你中途離開再回來。送出成功以後，可以按下面的按鈕刪除。</p>
 <button type="button" class="btn secondary" id="clear">清除這臺裝置上的作答</button>
 </section>
 """)
     scripts = '<script src="assets/common.js"></script>\n<script src="assets/listen.js"></script>\n'
-    parts.append(FOOT.format(version=PAGE_VERSION, scripts=scripts))
+    parts.append(foot(scripts, submit=True))
     return "\n".join(parts)
 
 
@@ -345,22 +429,25 @@ def build_questions_md() -> str:
     L: list[str] = []
     L.append("# 通話題目稿（聽眾）和撰稿人問題")
     L.append("")
-    L.append("> 這份題目和聆聽頁 `listen.html` 完全一樣：兩者都由 `tools/build.py` 從同一份題目產生。"
+    L.append("> 這份題目和聆聽頁 `listen.html`、撰稿人最後的問題頁 `final.html` 完全一樣：都由 `tools/build.py` 從同一份題目產生。"
              "要改題目，請改 `tools/build.py` 再執行 `python3 tools/build.py`，不要只改其中一邊。")
     L.append("")
     L.append("## 通話前準備（Ted）")
     L.append("")
     L.append("- 試用時間：2026 年 11 月 25 日（三）到 11 月 29 日（日）晚上 10 點（臺北時間）。")
     L.append("- 確認這位聽眾的代號。")
-    L.append("- 確認已經收到同意回覆；還沒有的話，開場前照唸下面的「聽眾版重點」，請對方口頭同意，在私人紀錄（`identity/`）寫下日期和時間；"
+    L.append("- 通話只給受邀參加的聽眾（代號 `L01` 起，有酬勞）。公開參加的人自己用聆聽頁，不通話。")
+    L.append("- 確認已經收到同意回覆（同意書 v3）；還沒有的話，開場前照唸下面的「聽眾版重點」，請對方口頭同意，在私人紀錄（`identity/`）寫下日期和時間；"
              "通話後傳一則簡訊，請對方回覆「同意」兩個字，把回覆存進 `identity/`。")
     L.append("- **每位聽眾都用一個新分頁**開 `listen.html#code=代號&round=1`，邊問邊點選。不要在同一個分頁只改網址的代號。"
-             "做完按「複製結果碼」，貼進 `stage2/pilot-private/` 裡這位聽眾的檔案。絕對不要放進任何 repo。")
+             "做完按「送出作答」，確認頁面出現收件編號。送不出去時按「複製結果碼」，貼進 `stage2/pilot-private/` 裡這位聽眾的檔案。"
+             "結果碼絕對不要放進任何 repo。")
     L.append("- 決定怎麼播放（三選一，最後一題「聽法」照實填）：")
     L.append("  1. 對方用自己的手機或電腦開個人連結，自己按播放，Ted 在電話裡唸題目。")
     L.append("  2. Ted 用 LINE 依頁面順序一次傳一個音檔，對方聽完再回答。只傳網站 `media/` 裡的公開檔案"
              "（`B_noad.mp3`、`B_ad.mp3`、`A_noad.mp3`、`A_ad.mp3`），不要傳電腦上其他的檔案，並請對方做完就刪除、不要轉傳。")
     L.append("  3. Ted 在通話中播放。音質會變差，「聲音清楚」的分數要分開看。")
+    L.append("- 開始前先問「視力狀況」那一題（全盲、低視能、看得見、不想說）。")
     L.append("- 每段片**播放以前**，先問「聽之前先回答」那一題（以前有沒有接觸過這段片的口述影像）。不論對方怎麼回答，都照常往下做。")
     L.append("- 不錄音。")
     L.append("")
@@ -381,6 +468,14 @@ def build_questions_md() -> str:
     L.append("")
     L.append("唸題目的方式：題目照下面的文字唸。每一題第一次唸的時候，把 1 到 5 分的意思全部唸出來；"
              "對方說記得了，之後可以只唸題目，再問「1 到 5 分，幾分？」。")
+    L.append("")
+    L.append(f"## 開始前：{VISION['label']}")
+    L.append("")
+    L.append(f"還沒播放任何音檔以前，先問這一題，把選項全部唸出來。結果碼裡這一行的開頭是「{VISION['line']}」。")
+    L.append("")
+    L.append(f"**{VISION['text']}**（{VISION['hint']}）")
+    L.append("")
+    L.extend(o.replace("  - ", "- ", 1) for o in md_options(VISION["options"], numbered=False))
     L.append("")
 
     for clip in CLIPS:
@@ -439,38 +534,55 @@ def build_questions_md() -> str:
     L.append("「謝謝您！酬勞會在一週內付款，請問要用 LINE Pay、用 LINE 傳超商電子禮物卡，還是銀行轉帳？也可以改捐給轉介您的單位。"
              "如果之後想退出、想看或刪除您的資料，隨時告訴我就可以。」")
     L.append("")
-    L.append("Ted：按「複製結果碼」，存到 `stage2/pilot-private/`，然後按「清除這臺裝置上的作答」，關閉這個分頁。"
-             "下一位聽眾用新分頁開他自己的連結。")
+    L.append("Ted：按「送出作答」，確認出現收件編號（送不出去就按「複製結果碼」，存到 `stage2/pilot-private/`），"
+             "然後按「清除這臺裝置上的作答」，關閉這個分頁。下一位聽眾用新分頁開他自己的連結。")
     L.append("")
     L.append("## 撰稿人做完以後的問題")
     L.append("")
-    L.append("四個半段（兩個從零撰寫、兩個修改草稿）全部做完以後再回答。請把答案寫在回信裡，和檔案一起寄給 Ted。")
+    L.append("四個半段（兩個從零撰寫、兩個修改草稿）全部做完以後再回答。請用[最後的問題頁](final.html)回答，"
+             "答完按「送出回答」。題目和這裡一樣。送不出去的時候，也可以把答案寫在 email 裡寄給 Ted（格式在這一節最後）。"
+             "請不要寫姓名或聯絡方式。")
     L.append("")
     L.append(f"### {len(WRITER_ITEMS)} 個 1 到 5 分的問題")
     L.append("")
     for n, item in enumerate(WRITER_ITEMS, start=1):
-        L.append(f"- **第{n}題　{item['label']}：{item['text']}**")
+        L.append(f"- **{legend_for(item, n)}**")
         L.extend(md_options(item["options"]))
     L.append("")
     L.append("### 每段片一題：以前接觸過嗎")
     L.append("")
     L.append(f"選「沒有」「有」或「不確定」。{EXPOSURE['writer_hint']}")
     L.append("")
-    for n, clip in enumerate(writer_exposure_clips(), start=len(WRITER_ITEMS) + 1):
+    for n, clip in writer_exposure_numbered():
         L.append(f"- **第{n}題　{EXPOSURE['label']}：{exposure_legend(clip)}**")
         L.extend(md_options(EXPOSURE["options"], numbered=False))
     L.append("")
-    L.append("回信可以直接複製這段：「" + "」「".join(item["key"] for item in WRITER_ITEMS)
-             + "」後面的底線換成 1 到 5 分；「"
+    L.append(f"### {TRAINING['label']}")
+    L.append("")
+    L.append(f"{TRAINING['hint']}")
+    L.append("")
+    L.append(f"- **{legend_for(TRAINING, training_number())}**")
+    L.extend(md_options(TRAINING["options"], numbered=False))
+    L.append("")
+    L.append(f"### {WRITER_COMMENT['label']}")
+    L.append("")
+    L.append(f"**{WRITER_COMMENT['text']}**（{WRITER_COMMENT['hint']}）")
+    L.append("")
+    L.append("### 用 email 回答的格式（送不出去的時候）")
+    L.append("")
+    L.append("最後的問題頁送出成功，就不用寄這段。要用 email 回答，可以直接複製這段：「分數」那一行每個「_」換成 1 到 5 分；「"
              + "」「".join(c["id"] + EXPOSURE["line"] for c in writer_exposure_clips())
-             + "」後面的底線換成「沒有」「有」或「不確定」。")
+             + "」後面換成「沒有」「有」或「不確定」；「" + TRAINING["line"] + "」後面換成「有」或「沒有」。"
+             "最後的問題頁產生的回覆文字也是這個格式。")
     L.append("")
     L.append("```")
     L.append(f"GapCaster 撰稿人問題 {PAGE_VERSION}")
-    L.append("代號：W__")
-    L.append(" ".join(f"{item['key']}_" for item in WRITER_ITEMS))
-    L.append(" ".join(f"{c['id']}{EXPOSURE['line']}_" for c in writer_exposure_clips()))
-    L.append("備註：（可不填）")
+    L.append("代號 W__")
+    L.append(WRITER_SCORE_LINE + " " + " ".join(f"{item['key']}_" for item in WRITER_ITEMS))
+    for c in writer_exposure_clips():
+        L.append(f"{c['id']}{EXPOSURE['line']} _")
+    L.append(f"{TRAINING['line']} _")
+    L.append(f"{WRITER_COMMENT['line']} （可不填）")
     L.append("```")
     L.append("")
     L.append("結果碼格式和各欄位的意思，請看 `README.md` 的「結果碼格式」。")
@@ -489,24 +601,148 @@ def writer_exposure_clips() -> list[dict]:
 
 WRITER_ITEMS = [
     {
+        "id": "effort",
         "key": "省力",
         "label": "省力",
         "text": "修改 GapCaster 草稿的那一半，和從零撰寫的那一半比起來，省不省力？",
         "options": ["費力很多", "費力一些", "差不多", "省力一些", "省力很多"],
     },
     {
+        "id": "accuracy",
         "key": "正確",
         "label": "正確",
         "text": "GapCaster 草稿描述的畫面，整體來說正確嗎？",
         "options": ["錯很多", "錯不少", "一半一半", "大多正確", "幾乎都正確"],
     },
     {
+        "id": "would_use",
         "key": "想用",
         "label": "想用",
         "text": "如果之後能用 GapCaster 產生草稿，你會想在工作中使用嗎？",
         "options": ["完全不想", "不太想", "看情況", "想", "非常想"],
     },
 ]
+# The three ratings share one line of the reply text: "分數 省力4 正確3 想用5".
+WRITER_SCORE_LINE = "分數"
+
+# Experience question (v3, 23 November 2026), asked of every describer with the final questions.
+# The rule applies to the open route only (eval-protocol.md, Amendment 2, item 6): an open describer
+# counts toward the describer analysis only with 有; 沒有 is reported separately; unanswered is left
+# out. Invited describers count whatever they answer; their answers are reported as counts.
+TRAINING = {
+    "id": "trained",
+    "line": "經驗",
+    "label": "撰稿經驗",
+    "text": "你寫過口述影像，或受過口述影像訓練嗎？",
+    "hint": ("公開參加的撰稿人，只有回答「有」的作答會算進撰稿人的結果；回答「沒有」的另外統計，不和撰稿人的結果合在一起；"
+             "沒有回答的，不算進撰稿人的結果。受邀參加的撰稿人不論怎麼回答，都算進撰稿人的結果。不論怎麼回答，都可以送出。"),
+    "options": ["有", "沒有"],
+}
+
+WRITER_COMMENT = {
+    "id": "comment",
+    "line": "備註",
+    "label": "備註",
+    "text": "還有什麼想說的嗎？例如審閱頁哪一句的時間點不對，請寫片段、前半或後半、第幾句。（可不填）",
+    "hint": ("這段文字不會逐字公開。請不要寫姓名或聯絡方式。受邀參加的人，如果想引用其中一句，會先逐句問你；"
+             "公開參加的人沒有留下聯絡方式，所以你寫的話不會被引用。"),
+}
+
+
+def writer_exposure_numbered() -> list[tuple[int, dict]]:
+    return list(enumerate(writer_exposure_clips(), start=len(WRITER_ITEMS) + 1))
+
+
+def training_number() -> int:
+    return len(WRITER_ITEMS) + len(WRITER_EXPOSURE_ORDER) + 1
+
+
+def build_final() -> str:
+    """final.html: the describers' final questions as a form with a 送出 button (kind writer-final)."""
+    parts = [head("撰稿人最後的問題｜GapCaster", submit=True), GENERATED_NOTE]
+    n_items = training_number()
+    parts.append(f"""<h1>撰稿人最後的問題</h1>
+<p id="who" class="panel">還沒有代號。請用工作清單或 Ted 給你的連結開啟這一頁，或在下面輸入代號。</p>
+
+<section aria-labelledby="h-start">
+<h2 id="h-start">開始之前</h2>
+<ul>
+<li>四個半段（兩個從零撰寫、兩個修改草稿）全部做完以後再回答。</li>
+<li>一共 {n_items} 題，加上可不填的備註。每一題都可以不答。</li>
+<li>答完按頁面最後的「送出回答」，回答會傳到 Ted 在 Cloudflare 的儲存空間。按下以前，什麼都不會送出。</li>
+<li>送不出去的時候，可以複製頁面最後的回覆文字，用 email 傳給 Ted：tedinroc@gmail.com。</li>
+<li>備註請不要寫姓名或聯絡方式。</li>
+</ul>
+<div id="setup" hidden>
+<h3 id="h-setup">輸入代號</h3>
+<form id="setup-form" aria-labelledby="h-setup" novalidate>
+<label class="block" for="in-code">你的代號（Ted 給你的，例如 W03；公開參加的人，用參加頁給你的代號：OW- 開頭，後面 5 個字）</label>
+<input type="text" id="in-code" name="code" autocomplete="off" autocapitalize="characters" spellcheck="false">
+<button type="submit" class="btn">用這個代號開始</button>
+</form>
+</div>
+</section>
+""")
+    parts.append('\n<section aria-labelledby="h-scores">')
+    parts.append(f'<h2 id="h-scores">{len(WRITER_ITEMS)} 個 1 到 5 分的問題</h2>')
+    for n, item in enumerate(WRITER_ITEMS, start=1):
+        parts.append(question_html(f"q-w-{item['id']}", f"w-{item['id']}", legend_for(item, n), item["options"],
+                                   WRITER_SCORE_LINE, item["key"], field=item["id"]))
+    parts.append("</section>")
+    parts.append('\n<section aria-labelledby="h-exposure">')
+    parts.append('<h2 id="h-exposure">每段片一題：以前接觸過嗎</h2>')
+    for n, clip in writer_exposure_numbered():
+        c = clip["id"]
+        legend = f"第{n}題　{EXPOSURE['label']}：{exposure_legend(clip)}"
+        legend_html = f"第{n}題　{esc(EXPOSURE['label'])}：{exposure_legend(clip, True)}"
+        parts.append(question_html(f"q-w-{c}-pre", f"w-{c}-pre", legend, EXPOSURE["options"], c + EXPOSURE["line"], "",
+                                   numbered_scale=False, hint=EXPOSURE["writer_hint"], legend_html=legend_html,
+                                   field=f"exposure.{c}"))
+    parts.append("</section>")
+    parts.append('\n<section aria-labelledby="h-trained">')
+    parts.append(f'<h2 id="h-trained">{esc(TRAINING["label"])}</h2>')
+    parts.append(question_html("q-w-trained", "w-trained", legend_for(TRAINING, training_number()), TRAINING["options"],
+                               TRAINING["line"], "", numbered_scale=False, hint=TRAINING["hint"], field=TRAINING["id"]))
+    parts.append("</section>")
+    parts.append(f"""
+<section aria-labelledby="h-note">
+<h2 id="h-note">{esc(WRITER_COMMENT["label"])}</h2>
+<label class="block" for="q-w-comment">{esc(WRITER_COMMENT["text"])}</label>
+<p class="hint" id="q-w-comment-hint">{esc(WRITER_COMMENT["hint"])}</p>
+<textarea id="q-w-comment" name="w-comment" data-line="{WRITER_COMMENT["line"]}" data-field="{WRITER_COMMENT["id"]}" aria-describedby="q-w-comment-hint" rows="4"></textarea>
+</section>
+""")
+    parts.append("""
+<section aria-labelledby="h-send">
+<h2 id="h-send">送出</h2>
+<p>按「送出回答」，你的代號、各題的回答和下面的回覆文字，會傳到 Ted 在 Cloudflare 的儲存空間。按下以前，什麼都不會送出。送出以後又改了回答，可以再送一次，Ted 用最後一次送出的版本。</p>
+<p id="unanswered" class="muted"></p>
+<div class="btn-row">
+<button type="button" class="btn" id="send">送出回答</button>
+</div>
+<p id="send-status" class="status" role="status" aria-live="polite"></p>
+<p id="send-receipt" class="muted"></p>
+<div id="send-help" class="warn" hidden>
+<p>送不出去也沒關係，回答還在這臺裝置上。可以稍後再按一次「送出回答」，或用下面的「複製回覆文字」，貼到 email 寄給 Ted：tedinroc@gmail.com。用 email 寄，Ted 會看到你的 email 地址。</p>
+</div>
+</section>
+
+<section aria-labelledby="h-reply">
+<h2 id="h-reply">回覆文字（送不出去的時候用）</h2>
+<div class="btn-row">
+<button type="button" class="btn secondary" id="copy">複製回覆文字</button>
+</div>
+<p id="status" class="status" role="status" aria-live="polite"></p>
+<label class="block" for="reply-out">回覆文字（也可以自己選取複製）</label>
+<textarea id="reply-out" class="code" readonly rows="10"></textarea>
+<h3 id="h-clear">清除回答</h3>
+<p>回答暫存在這臺裝置的瀏覽器裡。送出成功以後，可以按下面的按鈕刪除。</p>
+<button type="button" class="btn secondary" id="clear">清除這臺裝置上的回答</button>
+</section>
+""")
+    scripts = '<script src="assets/common.js"></script>\n<script src="assets/final.js"></script>\n'
+    parts.append(foot(scripts, submit=True))
+    return "\n".join(parts)
 
 
 # ---------------------------------------------------------------------------
@@ -517,6 +753,8 @@ def md_inline(s: str) -> str:
     s = esc(s)
     s = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", s)
     s = re.sub(r"`([^`]+)`", r"<code>\1</code>", s)
+    # [text](page.html): links to pages of this site only (no external addresses).
+    s = re.sub(r"\[([^\]]+)\]\(([a-z0-9][a-z0-9_./-]*\.(?:html|md))\)", r'<a href="\2">\1</a>', s)
     return s
 
 
@@ -614,8 +852,9 @@ def render_list(block: list[str]) -> str:
 CONSENT_FORM = """
 <section aria-labelledby="h-reply">
 <h2 id="h-reply">產生同意回覆</h2>
-<p>填好代號、勾選你的選擇，按「複製同意回覆」，再貼到 email 或 LINE 傳給 Ted：tedinroc@gmail.com。網頁不會自動送出任何資料。</p>
-<label class="block" for="c-code">你的代號（Ted 給你的，例如 W03 或 L07；還沒有可以不填）</label>
+<p><strong>受邀參加的人</strong>：填好代號、勾選你的選擇，按「複製同意回覆」，再貼到 email 或 LINE 傳給 Ted：tedinroc@gmail.com。這一段不會送出任何資料。</p>
+<p><strong>公開參加的人</strong>不用填這一段：在<a href="join.html">參加頁</a>勾選同意就可以。只有公開參加的撰稿人在第 7 節選了「可以放進作品」和「願意」，才需要用這一段產生授權聲明，在最後一行打上本名，再 email 給 Ted；這樣 Ted 會知道你的 email 地址和本名。</p>
+<label class="block" for="c-code">你的代號（Ted 給你的，例如 W03 或 L07；公開參加的人，填參加頁給你的代號；還沒有可以不填）</label>
 <input type="text" id="c-code" autocomplete="off" autocapitalize="characters" spellcheck="false">
 <fieldset id="c-role">
 <legend>你的身分（必填）</legend>
@@ -662,25 +901,26 @@ CONSENT_FORM = """
 def build_consent() -> str:
     md = (SITE / "consent.md").read_text(encoding="utf-8")
     body = md_to_html(md)
-    parts = [HEAD.format(title="試用同意書｜GapCaster"), GENERATED_NOTE,
+    parts = [head("試用同意書｜GapCaster"), GENERATED_NOTE,
              '<p class="muted">也有<a href="consent.md">純文字版（Markdown）</a>。</p>',
              body, CONSENT_FORM]
     scripts = '<script src="assets/common.js"></script>\n<script src="assets/consent.js"></script>\n'
-    parts.append(FOOT.format(version=PAGE_VERSION, scripts=scripts))
+    parts.append(foot(scripts))
     return "\n".join(parts)
 
 
 def build_questions_html() -> str:
     body = md_to_html(build_questions_md())
-    parts = [HEAD.format(title="題目稿｜GapCaster"), GENERATED_NOTE,
+    parts = [head("題目稿｜GapCaster"), GENERATED_NOTE,
              '<p class="muted">也有<a href="questions.md">純文字版（Markdown）</a>。</p>', body]
-    parts.append(FOOT.format(version=PAGE_VERSION, scripts=""))
+    parts.append(foot(""))
     return "\n".join(parts)
 
 
 def main() -> None:
     outputs = {
         "listen.html": build_listen(),
+        "final.html": build_final(),
         "questions.md": build_questions_md(),
         "questions.html": build_questions_html(),
         "consent.html": build_consent(),

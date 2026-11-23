@@ -1,8 +1,10 @@
-/* From-scratch writing page: plays one clip half, timestamped writing, timer, JSON download.
- * Nothing is sent anywhere. The file is downloaded and emailed by the participant.
+/* From-scratch writing page: plays one clip half, timestamped writing, timer, 送出 and JSON download.
+ * The text leaves the page only when the describer presses 送出撰寫內容 (GC.send in common.js, to
+ * the trial inbox, kind "write"), or when they download the file and e-mail it themselves.
  *
  * URL (hash preferred, it never reaches the server):
  *   write.html#code=W03&round=1&clip=A&half=2
+ *   write.html#code=OW-7K3QX&round=1&clip=A&half=1&row=2&mode=open   (open route, from kit.html)
  *
  * One trial round only (25-29 November 2026): the round is always 1 (kept in the file name and the
  * JSON for continuity); the page never asks for it and ignores any other value in the link.
@@ -10,7 +12,8 @@
 (function () {
   "use strict";
   var GC = window.GC;
-  var PAGE_VERSION = "v2";
+  // v3: 送出 button and the counterbalancing row in the JSON. v2: one round.
+  var PAGE_VERSION = "v3";
 
   // Where each half starts inside the trial clip, in seconds. Half 1 always starts at 0.
   // Fill the two placeholders once the split points are fixed (tools/fill.py does this).
@@ -29,10 +32,15 @@
 
   var params = GC.readParams();
   var code = GC.cleanCode(params.code);
+  // A link with a code of the wrong form is treated like no code: the setup form asks for it.
+  var badLinkCode = !!code && !GC.validCode(code);
+  if (badLinkCode) code = "";
   var round = 1;
   var clip = (params.clip || "").toUpperCase();
   var half = params.half === "1" || params.half === "2" ? params.half : "";
   if (clip !== "A" && clip !== "B") clip = "";
+  var row = /^[1-4]$/.test(params.row || "") ? Number(params.row) : null;
+  if (GC.isOpenCode(code)) row = GC.rowForCode(code); // an open describer's row follows from the code
 
   var $ = function (id) { return document.getElementById(id); };
   var statusEl = $("status");
@@ -52,11 +60,20 @@
       if (!c) $("in-code").focus();
       return;
     }
-    GC.goToHash("code=" + encodeURIComponent(c) + "&round=1&clip=" + cl + "&half=" + h);
+    if (!GC.validCode(c)) {
+      $("in-code").setAttribute("aria-invalid", "true");
+      $("who").textContent = GC.CODE_HELP;
+      GC.announce(statusEl, GC.CODE_HELP);
+      $("in-code").focus();
+      return;
+    }
+    GC.goToHash("code=" + encodeURIComponent(c) + "&round=1&clip=" + cl + "&half=" + h +
+      (GC.isOpenCode(c) ? "&mode=open" : ""));
   });
 
   if (!code || !clip || !half) {
     $("setup").hidden = false;
+    if (badLinkCode) $("who").textContent = "連結裡的代號用不了。" + GC.CODE_HELP + "請在下面重新輸入代號。";
     if (code) $("in-code").value = code;
     if (clip) $("in-clip-" + clip.toLowerCase()).checked = true;
     if (half) $("in-half-" + half).checked = true;
@@ -179,8 +196,8 @@
   }
   $("t-finish").addEventListener("click", function () {
     finish();
-    GC.announce(statusEl, "已完成，共計時 " + fmtClock(activeMs()) + "。請按「下載檔案」。");
-    $("download").focus();
+    GC.announce(statusEl, "已完成，共計時 " + fmtClock(activeMs()) + "。請到「交回」按「送出撰寫內容」。");
+    $("send").focus();
   });
 
   // --- Writing ----------------------------------------------------------------
@@ -264,7 +281,8 @@
   }
 
   // --- Download -----------------------------------------------------------------
-  function isoOrNull(ms) { return ms ? GC.isoLocal(new Date(ms)) : null; }
+  // Times are UTC (toISOString), like the review pages' log: nothing sent reveals the time zone.
+  function isoOrNull(ms) { return ms ? new Date(ms).toISOString() : null; }
 
   function exportData() {
     var p = parseLines(textEl.value);
@@ -273,6 +291,7 @@
       page_version: PAGE_VERSION,
       participant: code,
       round: round,
+      row: row,
       clip: clip,
       half: Number(half),
       half_start_s: halfStartKnown ? halfStart : null,
@@ -285,7 +304,9 @@
       text: textEl.value,
       lines: p.lines,
       unparsed_lines: p.unparsed,
-      exported_at: GC.isoLocal()
+      exported_at: new Date().toISOString(),
+      // Open codes: the consent record travels with the downloaded file too (e-mail fallback).
+      consent: GC.consentFor(code, params.consent)
     };
   }
 
@@ -314,8 +335,34 @@
     GC.announce(statusEl, "已下載 " + name + "。請用 email 附件寄給 Ted。");
   });
 
+  // --- Send ---------------------------------------------------------------------
+  var gate = GC.consentGate({ before: $("send").parentNode, root: "" });
+  var needConsent = gate.update(code, params.consent);
+  GC.sendButton({
+    button: $("send"),
+    status: $("send-status"),
+    receipt: $("send-receipt"),
+    help: $("send-help"),
+    key: function () { return GC.receiptKey("write", code, halfKey); },
+    build: function () {
+      var g = gate.check(code, params.consent);
+      if (g) return g;
+      var st = state();
+      if (st === "running" || st === "paused") {
+        // 取消 means do not send (the usual meaning of Cancel). To send part-way, press 完成 first.
+        if (!window.confirm("你還沒有按「完成」。\n按「確定」：結束計時並送出。\n按「取消」：不送出，繼續寫。")) {
+          return { cancel: true };
+        }
+        finish();
+      }
+      save();
+      var consent = GC.consentFor(code, params.consent);
+      return { body: GC.envelope("write", code, "write " + PAGE_VERSION, exportData(), consent) };
+    }
+  });
+
   $("clear").addEventListener("click", function () {
-    if (!window.confirm("確定要清除這臺裝置上的內容和計時嗎？清除後無法復原。請先確定 Ted 已經收到檔案。")) return;
+    if (!window.confirm("確定要清除這臺裝置上的內容和計時嗎？清除後無法復原。請先確定已經送出成功，或 Ted 已經收到檔案。")) return;
     GC.store.remove(storageKey);
     textEl.value = "";
     noteEl.value = "";
@@ -326,7 +373,9 @@
 
   // --- Init -------------------------------------------------------------------
   var restoredMsg = restore();
-  $("who").textContent = "代號 " + code + "，" + CLIP_TITLE[clip] + "，" + HALF_NAME[half] + "。" + restoredMsg;
+  $("who").textContent = "代號 " + code + "，" + CLIP_TITLE[clip] + "，" + HALF_NAME[half] + "。" +
+    (GC.isOpenCode(code) ? "你是公開參加（沒有酬勞）。" : "") +
+    (needConsent ? "這臺裝置上沒有你的同意紀錄：送出以前，請在「交回」那一節勾選同意。" : "") + restoredMsg;
   render();
   updateLineInfo();
   window.addEventListener("pagehide", save);

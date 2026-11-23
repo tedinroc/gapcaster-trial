@@ -1,5 +1,7 @@
 /* Consent reply generator. Builds a short text the participant copies into email or LINE.
- * Nothing is sent anywhere.
+ * Nothing is sent anywhere: this page's CSP has connect-src 'none'.
+ * Invited participants reply with this text. Open participants consent on join.html instead; an
+ * open describer who picks 可以 and 願意 uses this form only to get the licence statement.
  * Optional URL hash: consent.html#code=W03&round=1 (one trial round only; round is ignored)
  *
  * The reply has the same lines, in the same order, as the plain-text template in consent.md
@@ -13,7 +15,7 @@
 (function () {
   "use strict";
   var GC = window.GC;
-  var CONSENT_VERSION = "v2";
+  var CONSENT_VERSION = "v3";
   var CODE_SLOT = "（代號）";
   var NAME_LINE = "本名：（請在這裡打上你的本名再傳出）";
 
@@ -37,8 +39,8 @@
   var code = GC.cleanCode(params.code);
   if (code) {
     codeIn.value = code;
-    if (code.charAt(0) === "W") $("c-role-w").checked = true;
-    if (code.charAt(0) === "L") $("c-role-l").checked = true;
+    if (/^T?O?W/.test(code)) $("c-role-w").checked = true;
+    if (/^T?O?L/.test(code)) $("c-role-l").checked = true;
   }
 
   function sync() {

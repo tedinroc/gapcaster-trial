@@ -135,10 +135,26 @@ textarea.writing { min-height: 22rem; font-variant-numeric: tabular-nums; }
   cursor: pointer;
 }
 .btn.secondary { background: transparent; color: var(--accent); }
-.btn[disabled] { opacity: .45; cursor: not-allowed; }
+.btn[disabled], .btn[aria-disabled="true"] { opacity: .45; cursor: not-allowed; }
 .btn-row { display: flex; flex-wrap: wrap; align-items: center; }
+/* A link that looks like a button (the next step on join.html, the open route on index.html). */
+a.btn-link { display: inline-flex; align-items: center; text-decoration: none; box-sizing: border-box; }
+a.btn-link:hover { text-decoration: underline; }
+
+/* Open route: the participant's code, large and easy to copy down. */
+.bigcode {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 2.2rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+  margin: .5rem 0;
+}
+/* Describer work list. */
+ol.steps > li { margin: 1rem 0; }
+ol.steps > li > p { margin: .25rem 0; }
 
 .status { font-weight: 700; color: var(--ok); min-height: 1.75em; }
+.status.err { color: var(--warn-fg); background: var(--warn-bg); border-left: 4px solid currentColor; padding: .25rem .6rem; }
 .timer { font-size: 1.6rem; font-variant-numeric: tabular-nums; font-weight: 700; }
 .kbd { font-family: ui-monospace, Menlo, Consolas, monospace; border: 1px solid var(--border); border-radius: .3rem; padding: 0 .3rem; }
 

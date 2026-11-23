@@ -17,12 +17,21 @@ What it checks:
          levels, lang/title/viewport/CSP and a robots noindex meta present, audio/video have
          controls, an accessible name and no autoplay, no inline script or style, no third-party
          scripts/styles/fonts, local links resolve, buttons and links have text.
-  JS     no network APIs (fetch, XHR, beacons, sockets), no innerHTML, no external URLs.
+  CSP    every page has one. Pages that submit (listen.html, write.html, final.html) allow
+         connect-src to the trial inbox origin only; every other page has connect-src 'none'. No
+         other network origin appears in any CSP. Submitting pages load assets/common.js and have
+         a 送出 button with an aria-live status.
+  JS     the only network call on the site is the one fetch() in assets/common.js, to the inbox
+         address held in its GC_INBOX constant (the only URL allowed in assets/). No XHR, beacons,
+         sockets, dynamic import, innerHTML or document.write anywhere.
   Media  media/ holds only the public files listed below. review/<clip>-<half>/ holds only the
          draft-only files of a describer review page (review_pilot.html, clip.mp4,
          clip_with_ad.mp4, lines/AD###.wav, and clip.zh-TW.vtt for clip A). No audio or video
          anywhere else. A review page must carry noindex, load nothing external, and the files
-         it plays must sit next to it.
+         it plays must sit next to it. It carries the 23 November 送出 patch (btn-send,
+         window.GCReviewLog, ../../assets/common.js and ../../assets/review-send.js) and its own
+         inline script makes no network call. It has exactly the review CSP of
+         tools/patch_review.py (connect-src: the trial inbox only).
          Round-2 versions (版本一/版本二, including any describer-approved audio), the
          round2-audio/ sets, ORDER.txt and other stage2/pilot-private/ files must never be in
          this folder, and no file may name or map them. .gitignore must exist and list them.
@@ -34,9 +43,14 @@ What it checks:
          (README.md, 審閱頁 step 5 and 已知限制).
   Text   no home-directory paths, private words, simplified Chinese characters; e-mail
          addresses are listed as warnings (only the contact address should appear).
-  Sync   listen.html, questions.md and consent.html equal what tools/build.py generates, and
-         every question and option on listen.html appears in questions.md in the same order.
-         Each clip's exposure question (q-B-pre, q-A-pre) comes before that clip's first player.
+  Sync   listen.html, final.html, questions.md, questions.html and consent.html equal what
+         tools/build.py generates, and every question and option on listen.html and final.html
+         appears in questions.md in the same order. The vision-status question (q-vision) comes
+         before the first clip; each clip's exposure question (q-B-pre, q-A-pre) comes before that
+         clip's first player.
+  Text   (also) no workers-dot-dev address anywhere; the inbox address appears only where it is
+         allowed (assets/common.js, the submitting pages' and review pages' CSP, README.md and the
+         tools).
 """
 from __future__ import annotations
 
@@ -49,7 +63,13 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 SITE = Path(__file__).resolve().parent.parent
-PAGES = ["index.html", "consent.html", "listen.html", "write.html", "questions.html"]
+PAGES = ["index.html", "consent.html", "listen.html", "write.html", "questions.html", "join.html", "kit.html",
+         "final.html"]
+# Pages with a 送出 button: their CSP allows connect-src to the inbox origin, and nothing else.
+SUBMIT_PAGES = {"listen.html", "write.html", "final.html"}
+# The one script that may talk to the network (GC.send), and where the inbox address is kept.
+NETWORK_JS = "assets/common.js"
+INBOX_RE = re.compile(r'var GC_INBOX = "(https://[a-z0-9.-]+)(/api/submit)";')
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "source", "track", "wbr"}
 ALLOWED_EXTERNAL_LINK_HOSTS = {"creativecommons.org", "github.com"}
 # Public listener audio: no AD, and the raw draft with AD. Nothing else.
@@ -90,8 +110,9 @@ PRIVATE_NAME_WORDS = ("版本一", "版本二", "沒有口述影像")
 # 版本一/版本二 names, a describer-approved version, or a round-2 link).
 SECOND_ROUND = re.compile(r"第二輪|第\s*[2二]\s*輪|版本[一二]|核可版|round=2|[#&]r=2")
 SECOND_ROUND_FILES = {"consent.md", "questions.md", "index.html", "consent.html", "listen.html", "write.html",
-                      "questions.html", "assets/listen.js", "assets/consent.js", "assets/write.js",
-                      "assets/common.js"}
+                      "questions.html", "join.html", "kit.html", "final.html", "assets/listen.js",
+                      "assets/consent.js", "assets/write.js", "assets/common.js", "assets/join.js",
+                      "assets/kit.js", "assets/final.js", "assets/review-send.js"}
 # Lines .gitignore must keep (second line of defence for `git add -A`).
 GITIGNORE_REQUIRED = ["round2-audio/", "ORDER.txt", "*版本一*", "*版本二*", "*沒有口述影像*", "*.mp3", "*.mp4",
                       "*.wav", "*_edited.wav", "appro" + "ved/"]
@@ -291,9 +312,14 @@ def check_page(name: str) -> PageChecker | None:
         err(f"{name}: no viewport meta")
     if p.meta.get("charset", "").lower() != "utf-8":
         err(f"{name}: charset is not utf-8")
-    csp = p.meta.get("content-security-policy", "")
-    if "connect-src 'none'" not in csp or "script-src 'self'" not in csp:
-        err(f"{name}: CSP missing or too loose")
+    check_csp(name, p.meta.get("content-security-policy", ""))
+    if name in SUBMIT_PAGES:
+        if "assets/common.js" not in p.srcs:
+            err(f"{name}: submits, but does not load assets/common.js (the only code allowed to send)")
+        if "send" not in p.ids:
+            err(f"{name}: submits, but has no 送出 button (id=\"send\")")
+        if not re.search(r'id="send-status"[^>]*role="status"[^>]*aria-live="polite"', text):
+            err(f"{name}: the 送出 status (id=\"send-status\") must be role=status, aria-live=polite")
     if "noindex" not in p.meta.get("robots", "").lower():
         err(f"{name}: no <meta name=\"robots\" content=\"noindex, nofollow\">")
     if "user-scalable=no" in p.meta.get("viewport", "") or "maximum-scale" in p.meta.get("viewport", ""):
@@ -339,14 +365,81 @@ def check_page(name: str) -> PageChecker | None:
     return p
 
 
+_INBOX: list = []
+
+
+def inbox_origin() -> str | None:
+    """The trial inbox origin, from the GC_INBOX constant in assets/common.js (read once)."""
+    if not _INBOX:
+        path = SITE / NETWORK_JS
+        m = INBOX_RE.search(path.read_text(encoding="utf-8")) if path.exists() else None
+        _INBOX.append(m.group(1) if m else None)
+    return _INBOX[0]
+
+
+def csp_directives(csp: str) -> dict[str, list[str]]:
+    out: dict[str, list[str]] = {}
+    for part in csp.split(";"):
+        bits = part.split()
+        if bits:
+            out[bits[0].lower()] = bits[1:]
+    return out
+
+
+def check_csp(name: str, csp: str) -> None:
+    """Pages that submit may connect to the inbox origin only; every other page connects nowhere.
+    No directive may name any other network origin."""
+    if not csp:
+        err(f"{name}: no Content-Security-Policy")
+        return
+    d = csp_directives(csp)
+    origin = inbox_origin()
+    if d.get("script-src") != ["'self'"]:
+        err(f"{name}: CSP script-src must be exactly 'self'")
+    if d.get("default-src") != ["'self'"]:
+        err(f"{name}: CSP default-src must be exactly 'self'")
+    want = [origin] if name in SUBMIT_PAGES else ["'none'"]
+    if d.get("connect-src") != want:
+        err(f"{name}: CSP connect-src is {' '.join(d.get('connect-src', [])) or 'missing'}; it must be "
+            f"{' '.join(str(w) for w in want)}" + (" (a page that submits: the inbox origin only)"
+                                                   if name in SUBMIT_PAGES else " (this page does not submit)"))
+    for k, vals in d.items():
+        for v in vals:
+            if re.match(r"^(https?:|wss?:|\*|data:|blob:)", v) and not (k == "connect-src" and v == origin
+                                                                       and name in SUBMIT_PAGES):
+                err(f"{name}: CSP {k} allows {v}; no network origin other than the inbox is allowed")
+
+
 def check_js() -> None:
-    bad = [r"\bfetch\s*\(", r"XMLHttpRequest", r"sendBeacon", r"WebSocket", r"EventSource",
-           r"importScripts", r"\bimport\s*\(", r"\.innerHTML\b", r"https?://", r"document\.write"]
+    """The only network call is the single fetch() in assets/common.js, to GC_INBOX."""
+    bad = [r"XMLHttpRequest", r"sendBeacon", r"WebSocket", r"EventSource", r"importScripts", r"\bimport\s*\(",
+           r"\.innerHTML\b", r"document\.write", r"\.src\s*=\s*['\"]https?:", r"new\s+Image\s*\("]
+    origin = inbox_origin()
+    if not origin:
+        err(f"{NETWORK_JS}: no GC_INBOX constant of the form var GC_INBOX = \"https://.../api/submit\";")
     for path in sorted((SITE / "assets").glob("*.js")):
+        rel = f"assets/{path.name}"
         text = path.read_text(encoding="utf-8")
         for pat in bad:
             if re.search(pat, text):
-                err(f"assets/{path.name}: forbidden pattern {pat}")
+                err(f"{rel}: forbidden pattern {pat}")
+        fetches = len(re.findall(r"\bfetch\s*\(", text))
+        urls = re.findall(r"(?:https?:)?//[A-Za-z0-9.-]+\.[A-Za-z]{2,}[^\s\"'`)]*", text)
+        if rel == NETWORK_JS:
+            if fetches != 1:
+                err(f"{rel}: expected exactly one fetch( (GC.send to the inbox), found {fetches}")
+            if not re.search(r"window\.fetch\(GC_INBOX,", text):
+                err(f"{rel}: the fetch must post to GC_INBOX and nothing else")
+            others = [u for u in urls if not (origin and u.startswith(origin))]
+            if others:
+                err(f"{rel}: URLs other than the inbox: {', '.join(sorted(set(others)))}")
+            if len([u for u in urls if origin and u.startswith(origin)]) != 1:
+                err(f"{rel}: the inbox address must appear exactly once (in GC_INBOX)")
+        else:
+            if fetches:
+                err(f"{rel}: forbidden pattern fetch( (only {NETWORK_JS} may send, through GC.send)")
+            if urls:
+                err(f"{rel}: external address {urls[0]} (no URL is allowed in the site's scripts)")
 
 
 def check_css() -> None:
@@ -416,9 +509,28 @@ def check_media() -> None:
                 "other private audio stay in stage2/pilot-private/, never in this folder")
 
 
+def review_csp() -> str | None:
+    """The review pages' CSP, as tools/patch_review.py writes it."""
+    m = re.search(r'REVIEW_CSP = \((.*?)\)\n', (SITE / "tools" / "patch_review.py").read_text(encoding="utf-8"), re.S)
+    return "".join(re.findall(r'"([^"]*)"', m.group(1))) if m else None
+
+
 def check_review() -> None:
     """Describer review pages: generated by gapcaster (tested there), so not held to the checks of the
-    site's own pages; here only noindex, nothing external, and the files they play are next to them."""
+    site's own pages; here only noindex, nothing external, the files they play are next to them, the
+    送出 patch, and the review CSP (connect-src: the inbox origin only)."""
+    want_csp = review_csp()
+    origin = inbox_origin()
+    if not want_csp:
+        err("tools/patch_review.py: no REVIEW_CSP")
+    else:
+        d = csp_directives(want_csp)
+        if d.get("connect-src") != [origin]:
+            err(f"tools/patch_review.py: REVIEW_CSP connect-src must be exactly the inbox origin ({origin})")
+        for k, vals in d.items():
+            for v in vals:
+                if re.match(r"^(https?:|wss?:|\*|blob:)", v) and not (k == "connect-src" and v == origin):
+                    err(f"tools/patch_review.py: REVIEW_CSP {k} allows {v}")
     for d in REVIEW_DIRS:
         folder = SITE / d
         if not folder.is_dir():
@@ -430,6 +542,27 @@ def check_review() -> None:
         text = page.read_text(encoding="utf-8")
         if not re.search(r"<meta name=\"?robots\"? content=\"?noindex", text):
             err(f"{d}/review_pilot.html: no robots noindex meta (rebuild it with the current gapcaster)")
+        csps = re.findall(r'<meta http-equiv="Content-Security-Policy" content="([^"]*)">', text)
+        if len(csps) != 1 or (want_csp and csps[0] != want_csp):
+            err(f"{d}/review_pilot.html: needs exactly one CSP meta, equal to REVIEW_CSP "
+                "(run python3 tools/patch_review.py)")
+        elif text.find("<meta http-equiv=\"Content-Security-Policy\"") > text.find("<script"):
+            err(f"{d}/review_pilot.html: the CSP meta must come before the first script")
+        # The 送出 patch of 23 November 2026 (README.md, 審閱頁): the page's own script hands the log
+        # to assets/review-send.js, which sends it through GC.send in assets/common.js.
+        for need, what in ((r"id=\"?btn-send\b", "the 送出記錄 button (id=btn-send)"),
+                           (r"id=\"?send-status\b[^>]*role=\"?status", "the 送出 status line (role=status)"),
+                           (r"window\.GCReviewLog=", "window.GCReviewLog in the page script"),
+                           (r'<script src="\.\./\.\./assets/common\.js"></script>', "../../assets/common.js"),
+                           (r'<script src="\.\./\.\./assets/review-send\.js"></script>', "../../assets/review-send.js")):
+            if not re.search(need, text):
+                err(f"{d}/review_pilot.html: missing the 送出 patch: {what} (README.md, 審閱頁)")
+        inline = "".join(re.findall(r"<script>(.*?)</script>", text, re.S))
+        for pat in (r"\bfetch\s*\(", r"XMLHttpRequest", r"sendBeacon", r"WebSocket", r"EventSource",
+                    r"\bimport\s*\(", r"https?://"):
+            if re.search(pat, inline):
+                err(f"{d}/review_pilot.html: its inline script has a network call or address ({pat}); only "
+                    "assets/common.js may send")
         for ref in re.findall(r"\b(?:src|href)=\"([^\"]*)\"", text):
             if re.match(r"^(https?:)?//", ref):
                 err(f"{d}/review_pilot.html: external resource {ref}")
@@ -455,11 +588,25 @@ def check_text(forbid: list[str], prepublish: bool) -> None:
     except Exception:
         s2tw = None
     emails: dict[str, set] = {}
+    # Built from parts so this file does not name the address it forbids.
+    workers = "workers" + "." + "dev"
+    origin = inbox_origin()
+    inbox_host = origin.split("//", 1)[1] if origin else None
     for path, rel in text_files():
         text = path.read_text(encoding="utf-8")
         is_tool = rel.startswith("tools/")
         if home_re.search(text):
             err(f"{rel}: contains a home-directory path")
+        if workers in text.lower():
+            err(f"{rel}: contains a {workers} address (the inbox is only reached at its pages.dev address)")
+        if inbox_host and inbox_host in text:
+            n = text.count(inbox_host)
+            if rel in SUBMIT_PAGES or rel in REVIEW_PAGES:
+                if n != 1:
+                    err(f"{rel}: the inbox address appears {n} times; only the CSP connect-src may name it")
+            elif rel not in (NETWORK_JS, "README.md") and not is_tool:
+                err(f"{rel}: names the inbox address; only {NETWORK_JS} (GC_INBOX) and the CSP of the "
+                    "submitting pages may")
         for word in forbid:
             if word and word.lower() in text.lower():
                 err(f"{rel}: contains a private word from the forbid file")
@@ -579,6 +726,7 @@ def check_sync() -> None:
         return
     expected = {
         "listen.html": build.build_listen(),
+        "final.html": build.build_final(),
         "questions.md": build.build_questions_md(),
         "questions.html": build.build_questions_html(),
         "consent.html": build.build_consent(),
@@ -587,8 +735,22 @@ def check_sync() -> None:
         path = SITE / name
         if not path.exists() or path.read_text(encoding="utf-8") != text:
             err(f"{name} is out of date: run python3 tools/build.py")
+    if getattr(build, "INBOX_ORIGIN", None) != inbox_origin():
+        err(f"tools/build.py INBOX_ORIGIN ({getattr(build, 'INBOX_ORIGIN', None)}) differs from the GC_INBOX "
+            f"origin in {NETWORK_JS} ({inbox_origin()})")
     # Every legend/option/question label on listen.html must appear in questions.md, in order.
     listen = (SITE / "listen.html").read_text(encoding="utf-8")
+    # The vision-status question comes first: before the first clip's section and any player.
+    qv = listen.find('id="q-vision"')
+    first_sec = min([i for i in (listen.find(f'<section aria-labelledby="h-{c["id"]}">') for c in build.CLIPS) if i >= 0],
+                    default=-1)
+    first_audio = listen.find("<audio")
+    if qv < 0:
+        err("listen.html: no vision-status question (q-vision)")
+    elif (first_sec >= 0 and qv > first_sec) or (first_audio >= 0 and qv > first_audio):
+        err("listen.html: the vision-status question must come before the first clip")
+    if 'data-line="視力"' not in listen:
+        err("listen.html: the vision-status question must give the result-code line 視力")
     # The exposure question of each clip must be answered before any playback of that clip.
     for clip in build.CLIPS:
         c = clip["id"]
@@ -606,7 +768,7 @@ def check_sync() -> None:
     lc = LegendCollector()
     lc.feed(listen)
     md = (SITE / "questions.md").read_text(encoding="utf-8")
-    skip_labels = {"結果碼（也可以自己選取複製）"}
+    skip_labels = {"結果碼（也可以自己選取複製）", "回覆文字（也可以自己選取複製）"}
     pos = 0
     for item in lc.items:
         if item in skip_labels:
@@ -616,6 +778,23 @@ def check_sync() -> None:
             err(f"questions.md is missing (or out of order): {item}")
         else:
             pos = i + len(item)
+    # The describers' final questions (final.html) appear in the describer section of questions.md.
+    final_path = SITE / "final.html"
+    if final_path.exists():
+        fc = LegendCollector()
+        fc.feed(final_path.read_text(encoding="utf-8"))
+        pos = md.find("## 撰稿人做完以後的問題")
+        if pos < 0:
+            err("questions.md has no describer section (## 撰稿人做完以後的問題)")
+            pos = 0
+        for item in fc.items:
+            if item in skip_labels:
+                continue
+            i = md.find(item, pos)
+            if i < 0:
+                err(f"questions.md (describer section) is missing (or out of order): {item}")
+            else:
+                pos = i + len(item)
 
 
 def main() -> int:

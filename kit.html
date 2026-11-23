@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; media-src 'self'; img-src 'self'; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<meta name="color-scheme" content="light dark">
+<title>撰稿人工作清單｜GapCaster</title>
+<link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+<a class="skip" href="#main">跳到主要內容</a>
+<header class="site-header"><nav aria-label="網站"><a href="index.html">GapCaster 口述影像試用</a></nav></header>
+<main id="main">
+<h1>撰稿人工作清單</h1>
+<noscript><p class="warn">這一頁需要開啟 JavaScript 才能列出你的步驟。</p></noscript>
+<p id="who" class="panel">還沒有代號。公開參加的人，請先到<a href="join.html">參加頁</a>取得代號；受邀參加的人，請用 Ted 給你的連結。</p>
+
+<section aria-labelledby="h-start">
+<h2 id="h-start">開始之前</h2>
+<ul>
+<li>總共約 2 小時，可能到 2.5 小時。可以分幾次做，請在試用時間內做完：2026 年 11 月 25 日（星期三）到 11 月 29 日（星期日）晚上 10 點（臺北時間）。</li>
+<li>請用電腦的瀏覽器，建議戴耳機；手機不好操作撰寫頁和審閱頁。</li>
+<li>兩段片各分成兩半：一半在撰寫頁從零撰寫，另一半在審閱頁修改 GapCaster 的草稿。請照下面的順序做。</li>
+<li>每一步的頁面最後都有「送出」按鈕，做完那一步就按，內容會傳到 Ted 在 Cloudflare 的儲存空間。按下以前，什麼都不會送出。</li>
+<li>審閱頁請逐句標記「正確、小錯、錯」。標記只看內容和畫面對不對，不看文筆；定義寫在審閱頁上，也在<a href="consent.html">試用同意書</a>第 3 節。</li>
+<li>請不要在任何文字或備註裡寫姓名或聯絡方式。</li>
+<li>這一頁可以加入書籤，下次從這裡繼續。在這臺裝置上送出成功的步驟，會標示「這臺裝置已送出」。</li>
+</ul>
+
+<div id="setup" hidden>
+<h3 id="h-setup">輸入代號</h3>
+<form id="setup-form" aria-labelledby="h-setup" novalidate>
+<label class="block" for="in-code">你的代號（公開參加的人，用參加頁給你的代號：OW- 開頭，後面 5 個字）</label>
+<input type="text" id="in-code" name="code" autocomplete="off" autocapitalize="characters" spellcheck="false">
+<button type="submit" class="btn">用這個代號開始</button>
+</form>
+<p id="setup-status" class="status" role="status" aria-live="polite"></p>
+</div>
+</section>
+
+<section id="steps-section" aria-labelledby="h-steps" hidden>
+<h2 id="h-steps">你的步驟</h2>
+<p id="row-text"></p>
+<ol id="steps" class="steps"></ol>
+</section>
+
+<section id="invited-section" aria-labelledby="h-invited" hidden>
+<h2 id="h-invited">受邀參加的撰稿人</h2>
+<p>請照 Ted 信裡的連結和順序做四個半段。全部做完以後，到<a id="invited-final" href="final.html">最後的問題頁</a>回答幾個問題，再按「送出回答」。</p>
+</section>
+</main>
+<footer class="site-footer">
+<p>GapCaster 試用網站 v3。這個網頁不會送出任何資料。</p>
+</footer>
+<script src="assets/common.js"></script>
+<script src="assets/kit.js"></script>
+</body>
+</html>
