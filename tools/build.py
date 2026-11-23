@@ -98,17 +98,16 @@ ENGLISH = {
 METHOD = {
     "id": "method",
     "line": "聽法",
-    "text": "這次你是怎麼聽的？",
-    "hint": "通話時由 Ted 代填。",
-    "options": ["自己用聆聽網頁播放", "Ted 在通話中播放", "Ted 用 LINE 傳音檔", "臺北現場用耳機", "其他"],
+    "text": "這次你用什麼裝置聽？",
+    "hint": "只用來統計，不影響結果。",
+    "options": ["電腦", "手機或平板", "其他"],
 }
 
 COMMENT = {
     "id": "comment",
     "line": "備註",
     "text": "還有什麼想說的嗎？（可不填）",
-    "hint": ("這段文字不會逐字公開。請不要寫姓名或聯絡方式。受邀參加的人，如果想引用其中一句，會先逐句問你；"
-             "公開參加的人沒有留下聯絡方式，所以你寫的話不會被引用。"),
+    "hint": "這段文字不會公開，也不會被引用。請不要寫姓名或聯絡方式。",
 }
 
 # Vision status (v3, 23 November 2026). Asked first, before clip B, of every listener (invited and
@@ -427,47 +426,12 @@ def md_options(options: list[str], numbered: bool = True) -> list[str]:
 
 def build_questions_md() -> str:
     L: list[str] = []
-    L.append("# 通話題目稿（聽眾）和撰稿人問題")
+    L.append("# 題目稿（聽眾）和撰稿人問題")
     L.append("")
     L.append("> 這份題目和聆聽頁 `listen.html`、撰稿人最後的問題頁 `final.html` 完全一樣：都由 `tools/build.py` 從同一份題目產生。"
              "要改題目，請改 `tools/build.py` 再執行 `python3 tools/build.py`，不要只改其中一邊。")
     L.append("")
-    L.append("## 通話前準備（Ted）")
-    L.append("")
-    L.append("- 試用時間：2026 年 11 月 25 日（三）到 11 月 29 日（日）晚上 10 點（臺北時間）。")
-    L.append("- 確認這位聽眾的代號。")
-    L.append("- 通話只給受邀參加的聽眾（代號 `L01` 起，有酬勞）。公開參加的人自己用聆聽頁，不通話。")
-    L.append("- 確認已經收到同意回覆（同意書 v3）；還沒有的話，開場前照唸下面的「聽眾版重點」，請對方口頭同意，在私人紀錄（`identity/`）寫下日期和時間；"
-             "通話後傳一則簡訊，請對方回覆「同意」兩個字，把回覆存進 `identity/`。")
-    L.append("- **每位聽眾都用一個新分頁**開 `listen.html#code=代號&round=1`，邊問邊點選。不要在同一個分頁只改網址的代號。"
-             "做完按「送出作答」，確認頁面出現收件編號。送不出去時按「複製結果碼」，貼進 `stage2/pilot-private/` 裡這位聽眾的檔案。"
-             "結果碼絕對不要放進任何 repo。")
-    L.append("- 決定怎麼播放（三選一，最後一題「聽法」照實填）：")
-    L.append("  1. 對方用自己的手機或電腦開個人連結，自己按播放，Ted 在電話裡唸題目。")
-    L.append("  2. Ted 用 LINE 依頁面順序一次傳一個音檔，對方聽完再回答。只傳網站 `media/` 裡的公開檔案"
-             "（`B_noad.mp3`、`B_ad.mp3`、`A_noad.mp3`、`A_ad.mp3`），不要傳電腦上其他的檔案，並請對方做完就刪除、不要轉傳。")
-    L.append("  3. Ted 在通話中播放。音質會變差，「聲音清楚」的分數要分開看。")
-    L.append("- 開始前先問「視力狀況」那一題（全盲、低視能、看得見、不想說）。")
-    L.append("- 每段片**播放以前**，先問「聽之前先回答」那一題（以前有沒有接觸過這段片的口述影像）。不論對方怎麼回答，都照常往下做。")
-    L.append("- 不錄音。")
-    L.append("")
-    L.append("## 聽眾版重點（還沒收到書面同意時照唸）")
-    L.append("")
-    L.append(LISTENER_SUMMARY)
-    L.append("")
-    L.append("## 開場（照唸）")
-    L.append("")
-    L.append("「您好，我是 Ted。謝謝您參加 GapCaster 的口述影像試用。這是產品可用性試用，不是學術研究。"
-             "通話不錄音。整個過程大約 30 到 45 分鐘。每一題都可以不回答，任何時候想停都可以停，酬勞照付。"
-             "口述影像是 AI 寫的草稿，用合成語音唸出來。")
-    L.append("")
-    L.append("接下來會聽兩段短片的聲音。每段開始以前，我會先問您以前有沒有聽過這段片的口述影像。"
-             "然後先聽沒有口述影像的版本，再聽有口述影像的版本。"
-             "每個版本聽完，我會唸幾個問題，請用 1 到 5 分回答，我會把每個分數代表的意思唸給您聽。"
-             "最後每段還有一題關於畫面的問題，用自己的話回答就好。」")
-    L.append("")
-    L.append("唸題目的方式：題目照下面的文字唸。每一題第一次唸的時候，把 1 到 5 分的意思全部唸出來；"
-             "對方說記得了，之後可以只唸題目，再問「1 到 5 分，幾分？」。")
+    L.append("這次全部在試用網站上自己作答，沒有電話、通話或現場場次。這份只給想先看題目的人參考。")
     L.append("")
     L.append(f"## 開始前：{VISION['label']}")
     L.append("")
@@ -486,7 +450,7 @@ def build_questions_md() -> str:
         L.append("")
         L.append(f"### {c}：聽之前先回答")
         L.append("")
-        L.append(f"還沒播放 {c} 的任何音檔以前，先問這一題。不論對方怎麼回答，都照常往下做。"
+        L.append(f"還沒播放 {c} 的任何音檔以前，先回答這一題。不論怎麼回答，都照常往下做。"
                  f"結果碼裡這一行的開頭是「{c}{EXPOSURE['line']}」。")
         L.append("")
         L.append(f"**{exposure_legend(clip)}**（{EXPOSURE['listener_hint']}）")
@@ -502,7 +466,7 @@ def build_questions_md() -> str:
                 play = f"播放 {c} 沒有口述影像的版本（網站上的 `media/{src}`）。"
             else:
                 play = f"播放 {c} 有口述影像的版本（網站上的 `media/{src}`，GapCaster 的原始草稿）。"
-            L.append(f"{play}聽完再唸題目。結果碼裡這一行的開頭是「{c}{v['line']}」。")
+            L.append(f"{play}聽完再回答。結果碼裡這一行的開頭是「{c}{v['line']}」。")
             L.append("")
             items = [(None, UNDERSTOOD_NOAD)] if slot == "N" else list(enumerate(AD_ITEMS, start=1))
             for n, item in items:
@@ -513,7 +477,7 @@ def build_questions_md() -> str:
         L.append("")
         L.append(f"**{comprehension_text(clip)}**")
         L.append("")
-        L.append(f"（{COMPREHENSION_HINT}）把回答照對方的話打進去，不要改寫。")
+        L.append(f"（{COMPREHENSION_HINT}）")
         L.append("")
         if clip["english"]:
             L.append(f"**{ENGLISH['text']}**（{ENGLISH['hint']}）")
@@ -529,13 +493,9 @@ def build_questions_md() -> str:
     L.append("")
     L.append(f"**{COMMENT['text']}**（{COMMENT['hint']}）")
     L.append("")
-    L.append("## 結束（照唸）")
+    L.append("## 結束")
     L.append("")
-    L.append("「謝謝您！酬勞會在一週內付款，請問要用 LINE Pay、用 LINE 傳超商電子禮物卡，還是銀行轉帳？也可以改捐給轉介您的單位。"
-             "如果之後想退出、想看或刪除您的資料，隨時告訴我就可以。」")
-    L.append("")
-    L.append("Ted：按「送出作答」，確認出現收件編號（送不出去就按「複製結果碼」，存到 `stage2/pilot-private/`），"
-             "然後按「清除這臺裝置上的作答」，關閉這個分頁。下一位聽眾用新分頁開他自己的連結。")
+    L.append("在聆聽頁最後按「送出作答」，看到收件編號就完成了。")
     L.append("")
     L.append("## 撰稿人做完以後的問題")
     L.append("")
@@ -644,8 +604,7 @@ WRITER_COMMENT = {
     "line": "備註",
     "label": "備註",
     "text": "還有什麼想說的嗎？例如審閱頁哪一句的時間點不對，請寫片段、前半或後半、第幾句。（可不填）",
-    "hint": ("這段文字不會逐字公開。請不要寫姓名或聯絡方式。受邀參加的人，如果想引用其中一句，會先逐句問你；"
-             "公開參加的人沒有留下聯絡方式，所以你寫的話不會被引用。"),
+    "hint": "這段文字不會公開，也不會被引用。請不要寫姓名或聯絡方式。",
 }
 
 
@@ -851,36 +810,46 @@ def render_list(block: list[str]) -> str:
 
 CONSENT_FORM = """
 <section aria-labelledby="h-reply">
-<h2 id="h-reply">產生同意回覆</h2>
-<p><strong>受邀參加的人</strong>：填好代號、勾選你的選擇，按「複製同意回覆」，再貼到 email 或 LINE 傳給 Ted：tedinroc@gmail.com。這一段不會送出任何資料。</p>
-<p><strong>公開參加的人</strong>不用填這一段：在<a href="join.html">參加頁</a>勾選同意就可以。只有公開參加的撰稿人在第 7 節選了「可以放進作品」和「願意」，才需要用這一段產生授權聲明，在最後一行打上本名，再 email 給 Ted；這樣 Ted 會知道你的 email 地址和本名。</p>
-<label class="block" for="c-code">你的代號（Ted 給你的，例如 W03 或 L07；公開參加的人，填參加頁給你的代號；還沒有可以不填）</label>
+<h2 id="h-reply">同意並送出（只要一次）</h2>
+<p><strong>受邀參加的人</strong>：打開 Ted 傳給你的連結，代號就會帶入。勾選下面每一項（撰稿人再回答第 7 節的選項），按「同意並送出」，看到收件編號就完成了，不用再用 email 或 LINE 回覆，換裝置也不用再同意。2026 年 11 月 25 日凌晨 0 點（臺北時間）起才能送出。</p>
+<p><strong>公開參加的人</strong>在<a href="join.html">參加頁</a>按「同意並送出」就完成了，不用在這裡再做一次。只有參加頁顯示同意紀錄沒送到（例如網路斷了）時，才在這裡填你的代號，再按一次「同意並送出」。</p>
+<label class="block" for="c-code">你的代號（Ted 給你的，例如 W03-K7QXM 或 L07-Q4DXM）</label>
 <input type="text" id="c-code" autocomplete="off" autocapitalize="characters" spellcheck="false">
 <fieldset id="c-role">
-<legend>你的身分（必填）</legend>
+<legend>你的身分（必選）</legend>
 <label class="opt" for="c-role-l"><input type="radio" id="c-role-l" name="c-role" value="聽眾"> 聽眾</label>
 <label class="opt" for="c-role-w"><input type="radio" id="c-role-w" name="c-role" value="撰稿人"> 撰稿人</label>
 </fieldset>
 <fieldset id="c-agree-set">
-<legend>同意</legend>
-<label class="opt" for="c-agree"><input type="checkbox" id="c-agree"> 我已看完同意書，年滿 18 歲，同意參加。</label>
+<legend>請確認下面每一項（都要勾）</legend>
+<label class="opt" for="c-a1"><input type="checkbox" id="c-a1"> 我年滿 18 歲。</label>
+<label class="opt" for="c-a2"><input type="checkbox" id="c-a2"> 我讀過試用同意書 v4。</label>
+<label class="opt" for="c-a3"><input type="checkbox" id="c-a3"> 我同意參加這次試用。</label>
+<span id="c-open-item" hidden><label class="opt" for="c-a4"><input type="checkbox" id="c-a4"> 我了解公開參加沒有酬勞。</label></span>
+<label class="opt" for="c-a5"><input type="checkbox" id="c-a5"> 我不會在作答裡寫姓名或聯絡方式。</label>
 </fieldset>
 <div id="c-writer" hidden>
 <fieldset id="c-text">
-<legend>選項 A：你的文字可以放進參賽作品嗎？</legend>
+<legend>選項 A：你的文字可以放進參賽作品嗎？（必選）</legend>
 <label class="opt" for="c-text-yes"><input type="radio" id="c-text-yes" name="c-text" value="可以"> 可以放進作品</label>
 <label class="opt" for="c-text-no"><input type="radio" id="c-text-no" name="c-text" value="不要"> 不要放進作品</label>
 </fieldset>
-<div id="c-ccby-wrap" hidden>
+<div id="c-sign-wrap" hidden>
 <fieldset id="c-sign">
-<legend>選項 A-1：如果主辦單位依規則要求簽署的授權文件，你願意提供本名並簽署嗎？（必選。本名只存在 Ted 的私人資料夾，不公開）</legend>
-<label class="opt" for="c-sign-yes"><input type="radio" id="c-sign-yes" name="c-sign" value="願意"> 願意：我會在傳出的回覆最後一行打上本名</label>
+<legend>選項 A-1：如果主辦單位依規則要求簽署的授權文件，你願意提供本名並簽署嗎？（必選）</legend>
+<label class="opt" for="c-sign-yes"><input type="radio" id="c-sign-yes" name="c-sign" value="願意"> 願意：我在下面打上本名，同意第 7 節的授權聲明</label>
 <label class="opt" for="c-sign-no"><input type="radio" id="c-sign-no" name="c-sign" value="不願意"> 不願意：我的文字只用來計算數字，不放進作品</label>
 </fieldset>
 <div id="c-licence-wrap" hidden>
-<p class="panel">你選了「可以放進作品」和「願意」。同意回覆的最後會自動附上第 7 節的「授權聲明」，並填好你的代號。請整段一起傳給 Ted，傳出前在最後一行打上你的本名（這個網頁不會收你的本名）。</p>
+<p class="panel">請看上面第 7 節最後的「授權聲明」。打上你的本名並勾選同意，就完成授權。本名只和這一次的同意紀錄一起存在 Ted 在 Cloudflare 的收件伺服器（伺服器可能在臺灣以外，2027 年 3 月 1 日前自動刪除）；Ted 匯出的副本只存在私人資料夾。本名不公開、不交給 AI 分析工具（第 7、9、11 節）。</p>
+<label class="block" for="c-name">你的本名（必填；只用在授權聲明）</label>
+<input type="text" id="c-name" autocomplete="off" maxlength="60" spellcheck="false">
+<fieldset id="c-lic">
+<legend>授權聲明（必勾）</legend>
+<label class="opt" for="c-lic-ok"><input type="checkbox" id="c-lic-ok"> 我同意第 7 節的「授權聲明」，並以上面的本名簽署。</label>
+</fieldset>
 <fieldset id="c-ccby">
-<legend>選項 B：要不要用 CC BY 4.0 公開你的文字？</legend>
+<legend>選項 B：要不要用 CC BY 4.0 公開你的文字？（可不選）</legend>
 <label class="opt" for="c-ccby-yes"><input type="radio" id="c-ccby-yes" name="c-ccby" value="要"> 要</label>
 <label class="opt" for="c-ccby-no"><input type="radio" id="c-ccby-no" name="c-ccby" value="不要"> 不要</label>
 </fieldset>
@@ -888,12 +857,18 @@ CONSENT_FORM = """
 </div>
 </div>
 <div class="btn-row">
-<button type="button" class="btn" id="c-copy">複製同意回覆</button>
-<button type="button" class="btn secondary" id="c-share" hidden>分享同意回覆（手機）</button>
+<button type="button" class="btn" id="send">同意並送出</button>
 </div>
-<p id="c-status" class="status" role="status" aria-live="polite"></p>
-<label class="block" for="c-out">同意回覆（也可以自己選取複製）</label>
-<textarea id="c-out" class="code" readonly rows="12"></textarea>
+<p id="send-status" class="status" role="status" aria-live="polite"></p>
+<p id="c-receipt" class="muted"></p>
+<p id="c-done" class="panel" hidden>你已經同意過了，不用再按。只有想改撰稿人的選項（11 月 30 日中午 12 點以前）時，才需要改好再按一次「同意並送出」，Ted 用最後一次送出的選項。</p>
+<div id="c-next" class="panel" hidden>
+<p>同意完成了。下一步：</p>
+<p><a id="c-next-link" class="btn btn-link" href="index.html">下一步</a></p>
+</div>
+<div id="c-fallback-help" class="panel" hidden>
+<p>送不出去的時候，請過幾分鐘再按一次「同意並送出」。還是不行，請寫信告訴 Ted 發生了什麼事（tedinroc@gmail.com），Ted 修好網站以後你再按一次。同意只在這個網頁上做，不用 email 或 LINE 回覆。</p>
+</div>
 </section>
 """
 
@@ -901,11 +876,11 @@ CONSENT_FORM = """
 def build_consent() -> str:
     md = (SITE / "consent.md").read_text(encoding="utf-8")
     body = md_to_html(md)
-    parts = [head("試用同意書｜GapCaster"), GENERATED_NOTE,
+    parts = [head("試用同意書｜GapCaster", submit=True), GENERATED_NOTE,
              '<p class="muted">也有<a href="consent.md">純文字版（Markdown）</a>。</p>',
              body, CONSENT_FORM]
     scripts = '<script src="assets/common.js"></script>\n<script src="assets/consent.js"></script>\n'
-    parts.append(foot(scripts))
+    parts.append(foot(scripts, submit=True))
     return "\n".join(parts)
 
 

@@ -375,7 +375,7 @@
   var restoredMsg = restore();
   $("who").textContent = "代號 " + code + "，" + CLIP_TITLE[clip] + "，" + HALF_NAME[half] + "。" +
     (GC.isOpenCode(code) ? "你是公開參加（沒有酬勞）。" : "") +
-    (needConsent ? "這臺裝置上沒有你的同意紀錄：送出以前，請在「交回」那一節勾選同意。" : "") + restoredMsg;
+    (needConsent ? "這臺裝置上沒有你的同意紀錄；已經按過「同意並送出」的話不用理會，說明在「交回」那一節。" : "") + restoredMsg;
   render();
   updateLineInfo();
   window.addEventListener("pagehide", save);

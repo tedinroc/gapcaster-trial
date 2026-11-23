@@ -1,7 +1,7 @@
 /* Describer work list (kit.html). Nothing is sent from this page (its CSP has connect-src 'none').
  *
  * URL (hash, never sent to the server):
- *   kit.html#code=OW-7K3QX&round=1&mode=open&row=2&consent=v3....   (made by join.html)
+ *   kit.html#code=OW-7K3QX&round=1&mode=open&row=2&consent=v4....   (made by join.html)
  *
  * Lists the four half-tasks in the order of one counterbalancing row, then the final questions.
  * The rows are the table of README.md (給參加者的連結) and stage2/pilot/START-TRIALS.md 0.3.
@@ -28,7 +28,7 @@
   var params = GC.readParams();
   var code = GC.cleanCode(params.code);
   var row = /^[1-4]$/.test(params.row || "") ? Number(params.row) : null;
-  var token = params.consent && GC.consentFromToken(params.consent) ? params.consent : "";
+  var token = params.consent && GC.consentFromToken(params.consent, code) ? params.consent : "";
   var $ = function (id) { return document.getElementById(id); };
 
   $("setup-form").addEventListener("submit", function (ev) {
@@ -60,9 +60,8 @@
     return;
   }
   if (open) who += "你是公開參加（沒有酬勞）。請記下這個代號：要刪除資料時告訴 Ted。";
-  if (open && !GC.consentFor(code, token)) {
-    who += "這臺裝置上沒有你的同意紀錄：每一步按「送出」以前，那一頁會請你再勾選一次同意。";
-  }
+  // No consent prompt here: consent is given once (同意並送出 on join.html or consent.html) and is
+  // already at the inbox; the pages with 送出 only show a note when this device has no record.
   $("who").textContent = who;
 
   if (open && !GC.rowForCode(code)) {

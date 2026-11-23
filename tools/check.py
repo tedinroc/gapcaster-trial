@@ -66,7 +66,7 @@ SITE = Path(__file__).resolve().parent.parent
 PAGES = ["index.html", "consent.html", "listen.html", "write.html", "questions.html", "join.html", "kit.html",
          "final.html"]
 # Pages with a 送出 button: their CSP allows connect-src to the inbox origin, and nothing else.
-SUBMIT_PAGES = {"listen.html", "write.html", "final.html"}
+SUBMIT_PAGES = {"listen.html", "write.html", "final.html", "consent.html", "join.html"}
 # The one script that may talk to the network (GC.send), and where the inbox address is kept.
 NETWORK_JS = "assets/common.js"
 INBOX_RE = re.compile(r'var GC_INBOX = "(https://[a-z0-9.-]+)(/api/submit)";')

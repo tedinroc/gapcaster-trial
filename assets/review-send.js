@@ -9,8 +9,8 @@
  *
  * The page name sent with the log records the clip half and the counterbalancing row, e.g.
  * "review-pilot-1 A-1 row2": from the link (row=N, set by kit.html) or, for an open code, from the
- * code itself (GC.rowForCode). An open code with no consent record on this device gets the five
- * consent items next to the button (GC.consentGate) and is not sent until they are ticked.
+ * code itself (GC.rowForCode). A code with no consent record on this device gets a note next to
+ * the button (GC.consentGate); it never blocks, because consent was already given once online.
  */
 (function () {
   "use strict";

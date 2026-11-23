@@ -1,7 +1,8 @@
 /* Shared helpers for the GapCaster trial pages.
  *
  * Network: the ONLY network call on this site is GC.send() below. It posts one JSON body to the
- * trial inbox (GC_INBOX) and runs only when the participant presses a button labelled 送出.
+ * trial inbox (GC_INBOX) and runs only when the participant presses a button labelled 送出
+ * (including 同意並送出 on consent.html and join.html, which sends the consent record).
  * Nothing is sent before that press, nothing is retried on its own, and there are no beacons,
  * analytics or third parties. Pages that do not submit keep connect-src 'none' in their CSP,
  * so even a stray call would be blocked there. Copy, download and e-mail remain as fallbacks.
@@ -24,15 +25,19 @@
   var MAX_BYTES = 300000;   // the inbox refuses bodies over 300 KB; stay safely under it
   var TIMEOUT_MS = 15000;
 
-  // Consent v3 items an open participant ticks on join.html (all required). The record sent with
-  // each submission is {version: "v3", items: [...], at: ISO time of ticking}.
-  var CONSENT_VERSION = "v3";
-  var OPEN_CONSENT_ITEMS = ["年滿 18 歲", "讀過試用同意書 v3", "同意參加", "了解公開參加沒有酬勞",
+  // Consent v4: everyone agrees once, online. An open participant ticks OPEN_CONSENT_ITEMS on
+  // join.html, an invited one INVITED_CONSENT_ITEMS on consent.html; 同意並送出 sends the record
+  // {version: "v4", items: [...], at: ISO time} to the inbox (kind "consent"), and every later 送出
+  // of that code carries it too when this device has it. Pages never ask again: a code whose record
+  // is not on this device only gets a note (consentGate below).
+  var CONSENT_VERSION = "v4";
+  var OPEN_CONSENT_ITEMS = ["年滿 18 歲", "讀過試用同意書 v4", "同意參加", "了解公開參加沒有酬勞",
     "不在作答裡寫姓名或聯絡方式"];
+  var INVITED_CONSENT_ITEMS = ["年滿 18 歲", "讀過試用同意書 v4", "同意參加", "不在作答裡寫姓名或聯絡方式"];
   // Describers' section 7 choices, as flags in the consent token: Y, N, or - (not asked).
   var CHOICE_TEXT = {
     A: { Y: "選項 A：可以放進作品", N: "選項 A：不要放進作品" },
-    A1: { Y: "選項 A-1：願意", N: "選項 A-1：不願意" },
+    A1: { Y: "選項 A-1：願意（同意第 7 節授權聲明，以本名簽署）", N: "選項 A-1：不願意" },
     B: { Y: "選項 B：要", N: "選項 B：不要" }
   };
 
@@ -194,17 +199,19 @@
     return "open";
   }
 
-  // --- Consent record of an open participant ------------------------------------------------
-  // join.html keeps it in this browser and also puts a short token in the links it gives
-  // (#consent=v3.<unix seconds>[.<A><A1><B>]), so it survives blocked storage. Times are UTC
-  // (toISOString), so nothing sent reveals the device's time zone.
+  // --- Consent record ---------------------------------------------------------------------
+  // join.html and consent.html keep it in this browser and also put a short token in the links they
+  // give (#consent=v4.<unix seconds>[.<A><A1><B>]), so it survives blocked storage. The token and the
+  // stored record never hold a name: a describer's legal name (option A-1) goes only into the one
+  // kind "consent" submission. Times are UTC (toISOString), so nothing sent reveals the time zone.
+  function consentItems(code) { return (isOpenCode(code) ? OPEN_CONSENT_ITEMS : INVITED_CONSENT_ITEMS).slice(); }
   function consentToken(atMs, flags) {
     return CONSENT_VERSION + "." + Math.floor(atMs / 1000) + (flags ? "." + flags : "");
   }
-  function consentFromToken(tok) {
-    var m = /^v3\.(\d{9,11})(?:\.([YN])([YN-])([YN-]))?$/.exec(tok || "");
-    if (!m) return null;
-    var items = OPEN_CONSENT_ITEMS.slice();
+  function consentFromToken(tok, code) {
+    var m = /^v4\.(\d{9,11})(?:\.([YN])([YN-])([YN-]))?$/.exec(tok || "");
+    if (!m || !validCode(code)) return null;
+    var items = consentItems(code);
     if (m[2]) {
       items.push(CHOICE_TEXT.A[m[2]]);
       if (m[3] !== "-") items.push(CHOICE_TEXT.A1[m[3]]);
@@ -213,73 +220,59 @@
     return { version: CONSENT_VERSION, items: items, at: new Date(Number(m[1]) * 1000).toISOString() };
   }
   var memConsent = {}; // records made on this page, in case storage is blocked
+  function rememberConsent(code, rec) {
+    memConsent[code] = rec;
+    store.set("gc-consent:" + code, rec);
+  }
   function consentFor(code, token) {
-    if (!isOpenCode(code)) return null;
+    if (!validCode(code)) return null;
     if (memConsent[code]) return memConsent[code];
     var c = store.get("gc-consent:" + code);
-    if (c && c.version && Array.isArray(c.items) && c.at) return c;
-    return consentFromToken(token);
+    if (c && c.version === CONSENT_VERSION && Array.isArray(c.items) && c.at) return c;
+    return consentFromToken(token, code);
   }
   // One line for the fallback outputs (result code, reply text), so a result sent by e-mail still
-  // carries the consent record of an open code: "同意 v3｜<UTC time>｜<ticked items>".
+  // carries the consent record: "同意 v4｜<UTC time>｜<ticked items>".
   function consentLine(code, token) {
-    if (!isOpenCode(code)) return "";
+    if (!validCode(code)) return "";
     var c = consentFor(code, token);
     return c ? "同意 " + c.version + "｜" + c.at + "｜" + c.items.join("、")
-      : "同意 無（這臺裝置上沒有同意紀錄）";
+      : "同意 這臺裝置上沒有紀錄（已經按過「同意並送出」的話，不用理會）";
   }
 
-  // The five required items again, next to a 送出 button, for an open code that has no consent
-  // record on this device (for example, the code was made on a phone and typed in on a computer).
-  // Ticking all five records consent on this device (gc-consent:<code>); 送出 does not send before.
-  // opts: before (element the block is put in front of), root ("" or "../../", where consent.html is),
-  // boxClass (the block's class; the review pages have their own style sheet).
-  var GATE_LABELS = ["我年滿 18 歲。", "我讀過試用同意書 v3。", "我同意參加這次試用。", "我了解公開參加沒有酬勞。",
-    "我不會在作答裡寫姓名或聯絡方式。"];
+  // A note (never a block) next to a 送出 button, for a code whose consent record is not on this
+  // device, for example after switching devices. Consent is given once, by 同意並送出 on join.html
+  // (open) or consent.html (invited), and that record is already at the inbox, so nobody is asked
+  // to agree again: the note only says where to agree if the person never did. Answers are sent
+  // either way; only codes with a consent record are used (eval-protocol.md, Amendment 3).
+  // opts: before (element the note is put in front of), root ("" or "../../", where consent.html
+  // and join.html are), boxClass (the note's class; the review pages have their own style sheet).
   var gateCount = 0;
   function consentGate(opts) {
-    var box = null, boxes = [], shownFor = "";
+    var box = null, shownFor = "";
     gateCount += 1;
     var gid = "cg" + gateCount;
 
-    function needs(code, token) { return isOpenCode(code) && !consentFor(code, token); }
+    function needs(code, token) { return validCode(code) && !consentFor(code, token); }
 
     function build(code) {
-      box = document.createElement("div");
-      box.className = opts.boxClass || "warn";
+      box = document.createElement("p");
+      box.className = opts.boxClass || "panel";
       box.id = gid;
-      var p = document.createElement("p");
-      p.appendChild(document.createTextNode("這臺裝置上沒有代號 " + code + " 的同意紀錄（可能是換了裝置或瀏覽器）。" +
-        "公開參加的作答，要有同意紀錄才會使用。請看"));
+      var open = isOpenCode(code);
+      box.appendChild(document.createTextNode("這臺裝置上沒有代號 " + code + " 的同意紀錄。" +
+        (open ? "你在參加頁看到「同意紀錄已經送給 Ted」的話，換了裝置不用再同意。"
+              : "已經按過「同意並送出」（在哪臺裝置都可以）的話，不用再做。") +
+        "還沒同意過的話，請先到"));
       var a = document.createElement("a");
-      a.setAttribute("href", (opts.root || "") + "consent.html");
-      a.textContent = "試用同意書 v3";
-      p.appendChild(a);
-      p.appendChild(document.createTextNode("，再勾選下面每一項；全部勾選以後才能送出。"));
-      box.appendChild(p);
-      var fs = document.createElement("fieldset");
-      var lg = document.createElement("legend");
-      lg.textContent = "送出以前，請確認下面每一項（都要勾）";
-      fs.appendChild(lg);
-      boxes = [];
-      GATE_LABELS.forEach(function (text, i) {
-        var id = gid + "-" + (i + 1);
-        var label = document.createElement("label");
-        label.className = "opt";
-        label.setAttribute("for", id);
-        var input = document.createElement("input");
-        input.type = "checkbox";
-        input.id = id;
-        label.appendChild(input);
-        label.appendChild(document.createTextNode(" " + text));
-        fs.appendChild(label);
-        boxes.push(input);
-      });
-      box.appendChild(fs);
+      a.setAttribute("href", (opts.root || "") + "consent.html#code=" + encodeURIComponent(code));
+      a.textContent = "同意書頁";
+      box.appendChild(a);
+      box.appendChild(document.createTextNode("同意一次；作答要有同意紀錄才會使用。"));
       opts.before.parentNode.insertBefore(box, opts.before);
     }
 
-    // Show the block when this code needs it, hide it otherwise. Returns true when it is shown.
+    // Show the note when this code has no record here, hide it otherwise. Returns true when shown.
     function update(code, token) {
       var need = needs(code, token);
       if (need && (!box || shownFor !== code)) {
@@ -291,18 +284,9 @@
       return need;
     }
 
-    // At 送出: null when the page may send; otherwise {error, focus} for sendButton.
+    // At 送出: never stops the send (kept so the pages need no change).
     function check(code, token) {
-      if (!update(code, token)) return null;
-      for (var i = 0; i < boxes.length; i++) {
-        if (!boxes[i].checked) {
-          return { error: "還沒送出：公開參加的代號要先有同意紀錄。請勾選「送出以前，請確認下面每一項」的每一項，再按一次送出。" +
-            "還沒勾的是：" + GATE_LABELS[i], focus: boxes[i] };
-        }
-      }
-      var rec = { version: CONSENT_VERSION, items: OPEN_CONSENT_ITEMS.slice(), at: new Date().toISOString() };
-      memConsent[code] = rec;
-      store.set("gc-consent:" + code, rec);
+      update(code, token);
       return null;
     }
     return { update: update, check: check };
@@ -452,6 +436,7 @@
           // The words say it failed; the colour only repeats it.
           if (opts.status) opts.status.classList.add("err");
           announce(opts.status, sendErrorText(r));
+          if (opts.onFail) opts.onFail(r);
         }
         // Keep the keyboard on the button (it is now 再送一次 after a failure) unless the person has
         // moved on while waiting.
@@ -538,6 +523,9 @@
     WINDOW_TEXT: WINDOW_TEXT,
     CONSENT_VERSION: CONSENT_VERSION,
     OPEN_CONSENT_ITEMS: OPEN_CONSENT_ITEMS,
+    INVITED_CONSENT_ITEMS: INVITED_CONSENT_ITEMS,
+    consentItems: consentItems,
+    rememberConsent: rememberConsent,
     CHOICE_TEXT: CHOICE_TEXT,
     watchHash: watchHash,
     goToHash: goToHash,

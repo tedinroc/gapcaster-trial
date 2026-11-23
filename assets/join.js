@@ -1,12 +1,16 @@
-/* Open self-serve route (join.html). Nothing is sent from this page (its CSP has connect-src 'none').
+/* Open self-serve route (join.html). The only thing this page sends is the consent record, when the
+ * participant presses 同意並送出 (its CSP allows connect-src to the inbox origin only).
  *
  * The participant picks 聽眾 or 撰稿人, ticks the consent v3 items, and gets a random code made in
  * the browser: "OL-" (listener) or "OW-" (describer) plus 5 characters from
  * 23456789ABCDEFGHJKMNPQRSTUVWXYZ (crypto.getRandomValues). Describers also get one of the four
  * counterbalancing rows, each with probability 1/4: the row follows from the code's 5 random
- * characters (GC.rowForCode), so it is the same on every device. The consent record
- * {version, items, at} is kept in this browser and, as a short token, in the next link; it is sent
- * with every 送出 of that code.
+ * characters (GC.rowForCode), so it is the same on every device. 同意並送出 makes the code and sends
+ * the consent record {version, items, at} to the inbox at once (kind "consent"), so the person never
+ * has to agree again, on any device. The record (never the name) is also kept in this browser and,
+ * as a short token, in the next link, and goes with every 送出 of that code from this device. A
+ * describer who chooses 可以 and 願意 types their legal name here; it goes only into this one
+ * consent submission (payload.licence), never into storage, links or later submissions.
  *
  * Codes are issued only inside the trial window by this device's clock. join.html#test=1 issues
  * test codes (TOL-..., TOW-...) at any time; tests are always accepted by the inbox and are never
@@ -34,6 +38,9 @@
     var yes = writer && checked("j-text") === "Y";
     $("j-sign-wrap").hidden = !yes;
     $("j-licence-wrap").hidden = !(yes && checked("j-sign") === "Y");
+  }
+  function licenceWanted() {
+    return checked("j-role") === "writer" && checked("j-text") === "Y" && checked("j-sign") === "Y";
   }
   $("join-form").addEventListener("change", sync);
 
@@ -76,26 +83,17 @@
       $("next-text").textContent = (fresh ? "" : "這臺裝置之前拿過這個代號。") +
         "請打開聆聽頁。代號已經放在連結裡，會自動帶入。";
       link.textContent = "開始聆聽（聆聽頁）";
-      $("move-text").textContent = "要換到另一臺裝置聽的話，請按「複製下一步的連結」，傳到那臺裝置上打開。" +
-        "連結裡有你的代號和同意紀錄；只抄代號的話，送出以前要在那臺裝置上再勾選一次同意。";
+      $("move-text").textContent = "要換到另一臺裝置聽的話，請按「複製下一步的連結」，傳到那臺裝置上打開，" +
+        "或在那臺裝置的聆聽頁輸入代號。你已經同意過，換裝置不用再同意。";
     } else {
       $("next-text").textContent = (fresh ? "" : "這臺裝置之前拿過這個代號。") +
         "請打開你的工作清單：上面有四個步驟的連結，照順序做，最後回答幾個問題。代號已經放在連結裡。" +
         "可以把工作清單加入書籤，下次從那裡繼續。";
       link.textContent = "打開撰稿人工作清單";
       $("move-text").textContent = "撰寫頁和審閱頁請用電腦的瀏覽器。現在用的是手機的話，請按「複製下一步的連結」，" +
-        "傳到電腦上打開。連結裡有你的代號和同意紀錄；只抄代號的話，送出以前要在電腦上再勾選一次同意。";
+        "傳到電腦上打開。你已經同意過，換裝置不用再同意。";
     }
-    // An open describer who chose 可以 and 願意 still has to e-mail the licence statement (consent
-    // section 7); say it again here, with the consent page's reply form already holding the code.
-    var lic = $("licence-next");
-    if (cur.role === "writer" && /^YY/.test(String(cur.token || "").split(".")[2] || "")) {
-      var lp = $("licence-link");
-      lp.setAttribute("href", "consent.html#code=" + encodeURIComponent(cur.code));
-      lic.hidden = false;
-    } else {
-      lic.hidden = true;
-    }
+    if (!fresh) showConsentReceipt(cur.code, cur);
     if (fresh) {
       var h = $("h-code");
       h.focus();
@@ -120,6 +118,10 @@
   $("new-person").addEventListener("click", function () {
     if (!window.confirm("確定要換另一個人嗎？你的代號會從這一頁消失，請先記下來。")) return;
     GC.store.remove(CURRENT_KEY);
+    pending = null;
+    gen += 1;
+    retryBtn.hidden = true;
+    sendStatus.textContent = "";
     $("join-form").reset();
     sync();
     $("result").hidden = true;
@@ -132,6 +134,70 @@
       msg.focus();
     }
   });
+
+  // --- Send the consent record ------------------------------------------------------
+  var sendStatus = $("send-status");
+  var retryBtn = $("consent-retry");
+  var pending = null; // {body} still to send; holds the name only in memory, for 再送一次
+  var gen = 0;        // bumped for every new person, so a late answer for the previous one is ignored
+  function receiptKey(code) { return GC.receiptKey("consent", code); }
+  function licencePendingKey(code) { return "gc-licence-pending:" + code; } // a flag, never the name
+  function errText(r) {
+    return GC.sendErrorText(r).replace(/請改用下面的方法傳給 Ted/g, "請過幾分鐘再試").replace(/，或改用下面的方法傳給 Ted/g, "");
+  }
+  function licenceLink(code) {
+    var a = document.createElement("a");
+    a.setAttribute("href", "consent.html#code=" + encodeURIComponent(code));
+    a.textContent = "同意書頁（代號已經帶入）";
+    return a;
+  }
+  // After a reload: say whether the consent record reached Ted, and offer to send it again if not.
+  function showConsentReceipt(code, cur) {
+    var r = GC.store.get(receiptKey(code));
+    if (r && r.id) {
+      sendStatus.classList.remove("err");
+      sendStatus.textContent = "同意紀錄已經送給 Ted：" + GC.receiptText(r) + "不用再同意。";
+      return;
+    }
+    var rec = GC.consentFor(code, cur && cur.token);
+    if (!rec) return;
+    pending = { body: GC.envelope("consent", code, "join v4",
+      { format: "gapcaster-consent/1", page_version: "v4", route: "open", role: cur.role }, rec) };
+    sendStatus.classList.add("err");
+    sendStatus.textContent = "";
+    sendStatus.appendChild(document.createTextNode("同意紀錄還沒送到 Ted。請按「再送一次同意紀錄」。"));
+    if (GC.store.get(licencePendingKey(code))) {
+      sendStatus.appendChild(document.createTextNode("你的本名和授權聲明也還沒送到：請打開"));
+      sendStatus.appendChild(licenceLink(code));
+      sendStatus.appendChild(document.createTextNode("，重新打上本名、勾選授權聲明，按「同意並送出」。送到以前，你的文字只用來計算數字。"));
+    }
+    retryBtn.hidden = false;
+  }
+  function sendConsent() {
+    if (!pending) return;
+    retryBtn.hidden = true;
+    GC.announce(sendStatus, "正在送出同意紀錄，最多等 15 秒。");
+    var body = pending.body;
+    var mine = gen;
+    GC.send(body).then(function (r) {
+      if (mine !== gen) return;
+      if (r.ok) {
+        pending = null;
+        GC.store.set(receiptKey(body.code), { id: r.id, received_at: r.received_at });
+        if (body.payload && body.payload.licence) GC.store.remove(licencePendingKey(body.code));
+        sendStatus.classList.remove("err");
+        GC.announce(sendStatus, "同意紀錄已經送給 Ted：" + GC.receiptText(r) + "不用再同意。");
+        return;
+      }
+      sendStatus.classList.add("err");
+      var named = body.payload && body.payload.licence;
+      GC.announce(sendStatus, "同意紀錄還沒送到 Ted：" + errText(r) +
+        (named ? "你的本名和授權聲明要送到以後才算數；請按「再送一次同意紀錄」。還是不行的話，過一陣子到同意書頁（填上你的代號）再按一次「同意並送出」；一直不行，請寫信告訴 Ted 發生了什麼事。"
+               : "不用擔心：你在這臺裝置的其他頁按「送出」時，同意紀錄會跟著作答一起送出。也可以按「再送一次同意紀錄」。"));
+      retryBtn.hidden = false;
+    });
+  }
+  retryBtn.addEventListener("click", function (ev) { ev.preventDefault(); sendConsent(); });
 
   // --- Issue a code ---------------------------------------------------------------
   function ready() {
@@ -158,6 +224,16 @@
       if (checked("j-text") === "Y" && !checked("j-sign")) {
         GC.announce(statusEl, "請先回答選項 A-1：主辦單位要求時，你願意提供本名並簽署嗎？");
         $("j-sign-yes").focus();
+        return false;
+      }
+      if (licenceWanted() && !GC.oneLine($("j-name").value)) {
+        GC.announce(statusEl, "你選了「願意」：請打上你的本名。不想提供本名的話，請改選「不願意」。");
+        $("j-name").focus();
+        return false;
+      }
+      if (licenceWanted() && !$("j-lic-ok").checked) {
+        GC.announce(statusEl, "你選了「願意」：請勾選同意第 7 節的授權聲明。");
+        $("j-lic-ok").focus();
         return false;
       }
     }
@@ -192,10 +268,19 @@
     var consent = { version: GC.CONSENT_VERSION, items: items, at: new Date(atMs).toISOString() };
     var cur = { code: code, role: role, consent: true, token: GC.consentToken(atMs, flags) };
     if (writer) cur.row = GC.rowForCode(code);
-    GC.store.set("gc-consent:" + code, consent);
+    GC.rememberConsent(code, consent);
     GC.store.set(CURRENT_KEY, cur);
+    if (licenceWanted()) GC.store.set(licencePendingKey(code), 1);
     statusEl.textContent = "";
+    var payload = { format: "gapcaster-consent/1", page_version: "v4", route: "open", role: role };
+    if (licenceWanted()) {
+      payload.licence = { statement: "試用同意書 v4 第 7 節授權聲明", agreed: true, name: GC.oneLine($("j-name").value).slice(0, 60) };
+    }
+    gen += 1;
+    pending = { body: GC.envelope("consent", code, "join v4", payload, consent) };
+    $("j-name").value = "";
     showResult(cur, true);
+    sendConsent();
   });
 
   // --- Init ---------------------------------------------------------------------

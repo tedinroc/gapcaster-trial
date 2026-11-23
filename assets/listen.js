@@ -245,7 +245,7 @@
   if (code) {
     var parts = ["你的代號：" + code + "。"];
     if (isOpen) parts.push("你是公開參加（沒有酬勞）。請記下這個代號：要刪除資料時告訴 Ted。");
-    if (needConsent) parts.push("這臺裝置上沒有你的同意紀錄：送出以前，請在頁面最後「送出」那一節勾選同意。");
+    if (needConsent) parts.push("這臺裝置上沒有你的同意紀錄；已經按過「同意並送出」的話不用理會，說明在送出按鈕上方。");
     if (restored) parts.push("已恢復這臺裝置上之前的作答。");
     who.textContent = parts.join("");
   } else if (badLinkCode) {
