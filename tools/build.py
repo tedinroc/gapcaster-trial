@@ -3,10 +3,10 @@
 GapCaster trial site.
 
 One source of truth: the listener questions below are rendered both into the web page
-(listen.html) and into the phone script Ted reads aloud (questions.md), so the two can
-never drift apart. The describers' final questions are rendered into final.html (a form with
-a 送出 button) and into questions.md (the copy-paste fallback). consent.html is rendered from
-consent.md.
+(listen.html) and into the reference sheet for anyone who wants to see the questions first
+(questions.md; there are no calls), so the two can never drift apart. The describers' final
+questions are rendered into final.html (a form with a 送出 button) and into questions.md (the
+copy-paste fallback). consent.html is rendered from consent.md.
 
 Standard library only. Run from anywhere:  python3 tools/build.py
 """
@@ -129,7 +129,7 @@ VISION = {
 
 # Exposure question, one per clip (pre-registered before the trial): before this trial, had the
 # participant already heard an audio description of the clip's film, or read or reviewed an audio
-# description script of it? Listeners answer it on the listen page (and on calls) before the clip's
+# description script of it? Listeners answer it on the listen page before the clip's
 # first playback; describers answer it with their final questions. Analysis rule: 有 takes that
 # participant's data for that clip out of the main analysis (reported as a count only); 不確定 stays
 # in and is counted. Taking part and pay are unaffected. It names only the two trial films.
@@ -143,23 +143,6 @@ EXPOSURE = {
                     "不論怎麼回答，受邀參加的人酬勞都照付。"),
     "options": ["沒有", "有", "不確定"],
 }
-
-# Read aloud to a listener who has not sent written consent yet (consent.md section 12). The consent's
-# one-minute summary has describer-only points, so listeners get this shorter version.
-LISTENER_SUMMARY = (
-    "「開始前我先唸幾個重點，大約一分鐘。一、這是 GapCaster 的產品可用性試用，不是學術研究。"
-    "二、您會聽到的口述影像是 AI 寫的草稿，用合成語音唸，不是真人配音。"
-    "三、參加完全自願，任何題目都可以不答，隨時可以停，不用說原因，酬勞 800 元照付。"
-    "四、通話不錄音。"
-    "五、除了作答，我只記下您自述的視力狀況，以及付款和聯絡需要的資料。"
-    "六、做完我會在網頁上按「送出」，用代號標示的作答會存到我在 Cloudflare 的儲存空間，伺服器可能在臺灣以外，"
-    "2027 年 3 月 1 日前會自動刪除。"
-    "七、公開的只有代號和分數，不公開姓名；想引用您的話，會先逐句問您。"
-    "八、用代號標示的作答，我會用 Anthropic 公司的 AI 工具 Claude 協助分析，它的伺服器在臺灣以外；"
-    "您的姓名、聯絡方式和付款資料不會交給它。"
-    "九、個人資料最晚在 2027 年 3 月 1 日前刪除，想退出、查詢或刪除，隨時告訴我。"
-    "請問您年滿 18 歲嗎？同意參加嗎？通話後我會傳一則簡訊，麻煩回「同意」兩個字。」"
-)
 
 # Clip B is the primary listener clip, so it comes first: if someone stops early we still have it.
 CLIPS = [
